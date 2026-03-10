@@ -1,14 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { run as initRun } from '../commands/init.js';
 import { run as loopRun } from '../commands/loop.js';
-import { run as monitorRun } from '../commands/monitor.js';
-import { run as costRun } from '../commands/cost.js';
 
 const stubs = [
   { name: 'init', run: initRun },
   { name: 'loop', run: loopRun },
-  { name: 'monitor', run: monitorRun },
-  { name: 'cost', run: costRun },
 ] as const;
 
 describe('command stubs', () => {
