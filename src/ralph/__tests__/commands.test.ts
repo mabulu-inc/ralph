@@ -1,11 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { run as initRun } from '../commands/init.js';
-import { run as loopRun } from '../commands/loop.js';
 
-const stubs = [
-  { name: 'init', run: initRun },
-  { name: 'loop', run: loopRun },
-] as const;
+const stubs = [{ name: 'init', run: initRun }] as const;
 
 describe('command stubs', () => {
   it.each(stubs)('$name exports a run function that logs stub message', async ({ name, run }) => {
