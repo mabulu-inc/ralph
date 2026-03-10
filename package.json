@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/ralph/cli.js",
   "bin": {
-    "ralph": "./dist/ralph/cli.js"
+    "ralph": "./dist/ralph/bin.js"
   },
   "scripts": {
     "lint": "eslint src/",
