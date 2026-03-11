@@ -47,10 +47,10 @@ describe('integration: ralph init creates expected file structure', () => {
     cleanup(tmpDir);
   });
 
-  it('creates all eight scaffold files in a fresh directory', async () => {
+  it('creates all nine scaffold files in a fresh directory', async () => {
     const result = await runInit(tmpDir, defaultAnswers);
 
-    expect(result.created).toHaveLength(8);
+    expect(result.created).toHaveLength(9);
     expect(result.skipped).toHaveLength(0);
 
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'PRD.md'))).toBe(true);
@@ -60,6 +60,7 @@ describe('integration: ralph init creates expected file structure', () => {
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'prompts', 'rules.md'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'prompts', 'boot.md'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'prompts', 'system.md'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'docs', 'prompts', 'README.md'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'ralph.config.json'))).toBe(true);
   });
 

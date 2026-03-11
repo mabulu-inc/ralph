@@ -14,6 +14,7 @@ import { defaultBootPromptTemplate } from '../templates/boot-prompt.js';
 import { defaultSystemPromptTemplate } from '../templates/system-prompt.js';
 import { generateRules } from '../templates/rules-md.js';
 import { generateRalphConfigJson } from '../templates/ralph-config-json.js';
+import { generatePromptsReadme } from '../templates/prompts-readme.js';
 
 export interface InitAnswers {
   projectName: string;
@@ -32,6 +33,7 @@ export type OnConflict = (relativePath: string) => Promise<boolean>;
 
 export interface InitOptions {
   onConflict?: OnConflict;
+  promptsOnly?: boolean;
 }
 
 export interface InitResult {
@@ -181,35 +183,45 @@ export async function runInit(
 ): Promise<InitResult> {
   const config = buildTemplateConfig(answers);
   const onConflict = options?.onConflict;
+  const promptsOnly = options?.promptsOnly ?? false;
   const result: InitResult = { created: [], skipped: [], overwritten: [] };
 
-  await writeFile(rootDir, 'docs/PRD.md', generatePrd(config.projectName), onConflict, result);
-  await writeFile(rootDir, 'docs/RALPH-METHODOLOGY.md', generateMethodology(), onConflict, result);
-  await writeFile(rootDir, 'docs/tasks/T-000.md', generateTask000(config), onConflict, result);
-  const agent = answers.agent ?? 'claude';
-  if (agent === 'gemini') {
-    await writeFile(rootDir, 'GEMINI.md', generateGeminiMd(config), onConflict, result);
-  } else if (agent === 'codex') {
-    await writeFile(rootDir, 'AGENTS.md', generateAgentsMd(config), onConflict, result);
-  } else if (agent === 'continue') {
+  if (!promptsOnly) {
+    await writeFile(rootDir, 'docs/PRD.md', generatePrd(config.projectName), onConflict, result);
     await writeFile(
       rootDir,
-      '.continue/config.yaml',
-      generateContinueYaml(config),
+      'docs/RALPH-METHODOLOGY.md',
+      generateMethodology(),
       onConflict,
       result,
     );
-  } else if (agent === 'cursor') {
-    await writeFile(
-      rootDir,
-      '.cursor/rules/ralph.md',
-      generateCursorRules(config),
-      onConflict,
-      result,
-    );
-  } else {
-    await writeFile(rootDir, '.claude/CLAUDE.md', generateClaudeMd(config), onConflict, result);
+    await writeFile(rootDir, 'docs/tasks/T-000.md', generateTask000(config), onConflict, result);
+    const agent = answers.agent ?? 'claude';
+    if (agent === 'gemini') {
+      await writeFile(rootDir, 'GEMINI.md', generateGeminiMd(config), onConflict, result);
+    } else if (agent === 'codex') {
+      await writeFile(rootDir, 'AGENTS.md', generateAgentsMd(config), onConflict, result);
+    } else if (agent === 'continue') {
+      await writeFile(
+        rootDir,
+        '.continue/config.yaml',
+        generateContinueYaml(config),
+        onConflict,
+        result,
+      );
+    } else if (agent === 'cursor') {
+      await writeFile(
+        rootDir,
+        '.cursor/rules/ralph.md',
+        generateCursorRules(config),
+        onConflict,
+        result,
+      );
+    } else {
+      await writeFile(rootDir, '.claude/CLAUDE.md', generateClaudeMd(config), onConflict, result);
+    }
   }
+
   await writeFile(rootDir, 'docs/prompts/boot.md', defaultBootPromptTemplate(), onConflict, result);
   await writeFile(
     rootDir,
@@ -219,16 +231,19 @@ export async function runInit(
     result,
   );
   await writeFile(rootDir, 'docs/prompts/rules.md', generateRules(config), onConflict, result);
+  await writeFile(rootDir, 'docs/prompts/README.md', generatePromptsReadme(), onConflict, result);
 
-  await writeFile(
-    rootDir,
-    'ralph.config.json',
-    generateRalphConfigJson(config, agent, answers.model),
-    onConflict,
-    result,
-  );
+  if (!promptsOnly) {
+    await writeFile(
+      rootDir,
+      'ralph.config.json',
+      generateRalphConfigJson(config, answers.agent ?? 'claude', answers.model),
+      onConflict,
+      result,
+    );
 
-  await updatePackageJson(rootDir, answers);
+    await updatePackageJson(rootDir, answers);
+  }
 
   return result;
 }
@@ -300,6 +315,7 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
 }
 
 export async function run(args: string[]): Promise<void> {
+  const promptsOnly = args.includes('--prompts-only');
   const nonInteractive = args.includes('--non-interactive');
 
   let answers: InitAnswers;
@@ -326,7 +342,7 @@ export async function run(args: string[]): Promise<void> {
     return shouldOverwrite;
   };
 
-  const result = await runInit(cwd, answers, { onConflict });
+  const result = await runInit(cwd, answers, { onConflict, promptsOnly });
 
   rl.close();
 
