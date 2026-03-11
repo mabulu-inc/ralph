@@ -11,6 +11,7 @@ import {
   extractTaskIdFromLog,
   formatMonitorOutput,
   renderDashboard,
+  collectMonitorData,
   run,
   parseCurrentPhase,
   parseLastLogLine,
@@ -551,5 +552,125 @@ describe('ralph monitor (run)', () => {
   it('renderDashboard returns error message for missing tasks dir', async () => {
     const output = await renderDashboard(join(dir, 'nonexistent'), logsDir);
     expect(output).toBe('No tasks directory found');
+  });
+
+  it('collectMonitorData returns MonitorData object', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+    await writeFile(
+      join(tasksDir, 'T-002.md'),
+      `# T-002: Second task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: T-001\n- **PRD Reference**: §2\n\n## Description\n\nPending.\n`,
+    );
+
+    const data = await collectMonitorData(tasksDir, logsDir);
+    expect(data).not.toBeNull();
+    expect(data!.done).toBe(1);
+    expect(data!.total).toBe(2);
+    expect(data!.status).toBe('STOPPED');
+  });
+
+  it('collectMonitorData returns null for missing tasks dir', async () => {
+    const data = await collectMonitorData(join(dir, 'nonexistent'), logsDir);
+    expect(data).toBeNull();
+  });
+
+  it('outputs JSON when --json flag is passed', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+    await writeFile(
+      join(tasksDir, 'T-002.md'),
+      `# T-002: Second task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: T-001\n- **PRD Reference**: §2\n\n## Description\n\nPending.\n`,
+    );
+
+    await run(['--json'], dir);
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    const parsed = JSON.parse(output);
+    expect(parsed.status).toBe('STOPPED');
+    expect(parsed.done).toBe(1);
+    expect(parsed.total).toBe(2);
+    expect(parsed.currentTaskId).toBeNull();
+    expect(parsed.phases).toEqual([]);
+    expect(parsed.lastLogLine).toBeNull();
+  });
+
+  it('outputs JSON with -j short flag', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+
+    await run(['-j'], dir);
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    const parsed = JSON.parse(output);
+    expect(parsed.status).toBe('STOPPED');
+    expect(parsed.done).toBe(1);
+    expect(parsed.total).toBe(1);
+  });
+
+  it('outputs JSONL in watch mode with --json (no screen clear)', async () => {
+    vi.useFakeTimers();
+
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: Task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+
+    const result: RunResult = await run(['-w', '-i', '1', '--json'], dir);
+    expect(result.watching).toBe(true);
+
+    // JSON watch mode should NOT clear screen
+    expect(clearSpy).not.toHaveBeenCalled();
+
+    // Initial render outputs valid JSON
+    expect(logSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+    const firstLine = logSpy.mock.calls[0][0];
+    const parsed = JSON.parse(firstLine);
+    expect(parsed.status).toBe('STOPPED');
+    expect(parsed.done).toBe(1);
+
+    result.stop!();
+    vi.useRealTimers();
+  });
+
+  it('JSON output serializes dates as ISO strings', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nPending.\n`,
+    );
+
+    const logContent = [
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Boot"}]},"timestamp":"2026-03-10T12:00:00Z"}',
+    ].join('\n');
+    await writeFile(join(logsDir, 'T-001-20260310-120000.jsonl'), logContent);
+
+    await run(['--json'], dir);
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    const parsed = JSON.parse(output);
+    expect(parsed.phases).toEqual(['Boot']);
+    expect(parsed.currentPhaseStarted).toBe('2026-03-10T12:00:00.000Z');
+  });
+
+  it('JSON output includes null for missing tasks directory', async () => {
+    await rm(tasksDir, { recursive: true, force: true });
+
+    await run(['--json'], dir);
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    const parsed = JSON.parse(output);
+    expect(parsed).toBeNull();
+  });
+
+  it('--json flag is mentioned in help output', async () => {
+    await run(['--help'], dir);
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('--json');
   });
 });

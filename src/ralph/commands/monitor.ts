@@ -246,16 +246,15 @@ export interface RunResult {
   stop?: () => void;
 }
 
-export async function renderDashboard(tasksDir: string, logsDir: string): Promise<string> {
+export async function collectMonitorData(
+  tasksDir: string,
+  logsDir: string,
+): Promise<MonitorData | null> {
   let tasks: Task[];
   try {
     tasks = await scanTasks(tasksDir);
   } catch {
-    return 'No tasks directory found';
-  }
-
-  if (tasks.length === 0) {
-    return 'No tasks found';
+    return null;
   }
 
   const counts = countByStatus(tasks);
@@ -293,7 +292,7 @@ export async function renderDashboard(tasksDir: string, logsDir: string): Promis
     }
   }
 
-  return formatMonitorOutput({
+  return {
     status,
     done: counts.DONE,
     total,
@@ -302,21 +301,64 @@ export async function renderDashboard(tasksDir: string, logsDir: string): Promis
     phases,
     currentPhaseStarted,
     lastLogLine,
-  });
+  };
+}
+
+export async function renderDashboard(tasksDir: string, logsDir: string): Promise<string> {
+  const data = await collectMonitorData(tasksDir, logsDir);
+  if (!data) {
+    return 'No tasks directory found';
+  }
+  if (data.done === 0 && data.total === 0) {
+    return 'No tasks found';
+  }
+  return formatMonitorOutput(data);
 }
 
 export async function run(args: string[], cwd?: string): Promise<RunResult> {
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: ralph monitor [-w|--watch] [-i|--interval <seconds>]');
+    console.log('Usage: ralph monitor [-w|--watch] [-i|--interval <seconds>] [-j|--json]');
     return { watching: false };
   }
 
   const projectDir = cwd ?? process.cwd();
   const tasksDir = join(projectDir, 'docs', 'tasks');
   const logsDir = join(projectDir, '.ralph-logs');
+  const isJson = args.includes('--json') || args.includes('-j');
+  const isWatch = args.includes('-w') || args.includes('--watch');
+
+  if (isJson) {
+    const data = await collectMonitorData(tasksDir, logsDir);
+    console.log(JSON.stringify(data));
+
+    if (isWatch) {
+      const intervalIdx =
+        args.indexOf('-i') !== -1 ? args.indexOf('-i') : args.indexOf('--interval');
+      const intervalSec = intervalIdx !== -1 ? parseInt(args[intervalIdx + 1], 10) || 5 : 5;
+
+      const refresh = async () => {
+        const refreshData = await collectMonitorData(tasksDir, logsDir);
+        console.log(JSON.stringify(refreshData));
+      };
+
+      const intervalId = setInterval(refresh, intervalSec * 1000);
+
+      const stop = () => {
+        clearInterval(intervalId);
+      };
+
+      process.on('SIGINT', () => {
+        stop();
+        process.exit(0);
+      });
+
+      return { watching: true, stop };
+    }
+
+    return { watching: false };
+  }
 
   const output = await renderDashboard(tasksDir, logsDir);
-  const isWatch = args.includes('-w') || args.includes('--watch');
 
   if (isWatch) {
     console.clear();
