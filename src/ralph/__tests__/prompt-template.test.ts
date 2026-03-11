@@ -21,6 +21,7 @@ const mockTask: Task = {
   blocked: false,
   description: 'Implement feature X as described in the PRD.',
   producesCount: 2,
+  touches: ['src/core/foo.ts', 'src/core/bar.ts'],
 };
 
 const mockConfig: ProjectConfig = {
@@ -90,6 +91,19 @@ describe('interpolateTemplate', () => {
     const template = 'DB: {{config.database}}';
     const result = interpolateTemplate(template, mockTask, mockConfig);
     expect(result).toBe('DB: ');
+  });
+
+  it('replaces task.touches with comma-separated file list', () => {
+    const template = 'Touches: {{task.touches}}';
+    const result = interpolateTemplate(template, mockTask, mockConfig);
+    expect(result).toBe('Touches: src/core/foo.ts, src/core/bar.ts');
+  });
+
+  it('replaces task.touches with fallback when empty', () => {
+    const taskNoTouches = { ...mockTask, touches: [] };
+    const template = 'Touches: {{task.touches}}';
+    const result = interpolateTemplate(template, taskNoTouches, mockConfig);
+    expect(result).toBe('Touches: not specified');
   });
 
   it('leaves unknown variables as-is', () => {

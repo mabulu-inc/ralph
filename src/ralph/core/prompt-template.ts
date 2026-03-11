@@ -14,6 +14,7 @@ export function interpolateTemplate(
     'task.title': task.title,
     'task.description': task.description,
     'task.prdReference': task.prdReference,
+    'task.touches': task.touches.length > 0 ? task.touches.join(', ') : 'not specified',
     'config.language': config.language,
     'config.packageManager': config.packageManager,
     'config.testingFramework': config.testingFramework,

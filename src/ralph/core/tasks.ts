@@ -17,12 +17,21 @@ export interface Task {
   milestone: string;
   depends: string[];
   prdReference: string;
+  touches: string[];
   completed: string | undefined;
   commit: string | undefined;
   cost: string | undefined;
   blocked: boolean;
   description: string;
   producesCount: number;
+}
+
+function parseTouches(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(',')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
 }
 
 function parseDeps(raw: string | undefined): string[] {
@@ -47,6 +56,8 @@ export function parseTaskFile(filename: string, content: string): Task {
   const commit = extractFieldFromAst(tree, 'Commit');
   const cost = extractFieldFromAst(tree, 'Cost');
   const blocked = hasSection(tree, 'Blocked');
+  const touchesRaw = extractFieldFromAst(tree, 'Touches');
+  const touches = parseTouches(touchesRaw);
   const description = extractSectionFirstParagraph(tree, 'Description');
   const producesCount = countListItemsInSection(tree, 'Produces');
 
@@ -58,6 +69,7 @@ export function parseTaskFile(filename: string, content: string): Task {
     milestone,
     depends,
     prdReference,
+    touches,
     completed,
     commit,
     cost,

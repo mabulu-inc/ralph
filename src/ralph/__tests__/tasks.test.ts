@@ -104,6 +104,23 @@ Depends on two tasks.
 - \`src/multi.ts\`
 `;
 
+const TASK_WITH_TOUCHES = `# T-060: Task with touches
+
+- **Status**: TODO
+- **Milestone**: 2 — Core
+- **Depends**: none
+- **PRD Reference**: §3
+- **Touches**: \`src/core/tasks.ts\`, \`src/core/config.ts\`
+
+## Description
+
+A task that specifies which files it touches.
+
+## Produces
+
+- \`src/core/tasks.ts\`
+`;
+
 const MINIMAL_TASK = `# T-010: Minimal
 
 - **Status**: TODO
@@ -135,6 +152,7 @@ describe('parseTaskFile', () => {
       blocked: false,
       description: 'Set up the project infrastructure.',
       producesCount: 1,
+      touches: [],
     });
   });
 
@@ -154,6 +172,7 @@ describe('parseTaskFile', () => {
       blocked: false,
       description: 'Parse task files.',
       producesCount: 1,
+      touches: [],
     });
   });
 
@@ -301,6 +320,33 @@ Fields have trailing spaces.
     expect(task.milestone).toBe('2 — Core');
     expect(task.depends).toEqual([]);
     expect(task.prdReference).toBe('§2');
+  });
+
+  it('parses touches field as array of file paths', () => {
+    const task = parseTaskFile('T-060.md', TASK_WITH_TOUCHES);
+    expect(task.touches).toEqual(['src/core/tasks.ts', 'src/core/config.ts']);
+  });
+
+  it('returns empty array when touches field is absent', () => {
+    const task = parseTaskFile('T-010.md', MINIMAL_TASK);
+    expect(task.touches).toEqual([]);
+  });
+
+  it('parses single touches value', () => {
+    const content = `# T-061: Single touch
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+- **Touches**: \`src/single.ts\`
+
+## Description
+
+Single touch file.
+`;
+    const task = parseTaskFile('T-061.md', content);
+    expect(task.touches).toEqual(['src/single.ts']);
   });
 
   it('parses fields with mixed bold styles (underscore bold)', () => {
