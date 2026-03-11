@@ -4,5 +4,6 @@
   "testingFramework": "Vitest",
   "qualityCheck": "pnpm check",
   "testCommand": "pnpm test",
+  "fileNaming": "kebab-case",
   "agent": "claude"
 }
