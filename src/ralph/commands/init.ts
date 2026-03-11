@@ -4,6 +4,8 @@ import * as readline from 'node:readline';
 
 import { generateClaudeMd, type InitConfig } from '../templates/claude-md.js';
 import { generateAgentsMd } from '../templates/agents-md.js';
+import { generateContinueYaml } from '../templates/continue-yaml.js';
+import { generateCursorRules } from '../templates/cursor-rules.js';
 import { generateGeminiMd } from '../templates/gemini-md.js';
 import { generateMethodology } from '../templates/methodology.js';
 import { generatePrd } from '../templates/prd.js';
@@ -110,6 +112,22 @@ export async function runInit(rootDir: string, answers: InitAnswers): Promise<In
     await writeFile(rootDir, 'GEMINI.md', generateGeminiMd(config), overwrite, result);
   } else if (agent === 'codex') {
     await writeFile(rootDir, 'AGENTS.md', generateAgentsMd(config), overwrite, result);
+  } else if (agent === 'continue') {
+    await writeFile(
+      rootDir,
+      '.continue/config.yaml',
+      generateContinueYaml(config),
+      overwrite,
+      result,
+    );
+  } else if (agent === 'cursor') {
+    await writeFile(
+      rootDir,
+      '.cursor/rules/ralph.md',
+      generateCursorRules(config),
+      overwrite,
+      result,
+    );
   } else {
     await writeFile(rootDir, '.claude/CLAUDE.md', generateClaudeMd(config), overwrite, result);
   }

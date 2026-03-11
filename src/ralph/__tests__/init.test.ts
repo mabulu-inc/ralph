@@ -292,6 +292,118 @@ describe('runInit with codex agent', () => {
   });
 });
 
+describe('runInit with continue agent', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('creates .continue/config.yaml when agent is continue', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'continue' };
+    const result = await runInit(tmpDir, answers);
+    const filePath = path.join(tmpDir, '.continue', 'config.yaml');
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(result.created).toContain('.continue/config.yaml');
+  });
+
+  it('does not create .claude/CLAUDE.md when agent is continue', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'continue' };
+    await runInit(tmpDir, answers);
+    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(false);
+  });
+
+  it('config.yaml contains project name and config', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'continue' };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, '.continue', 'config.yaml'), 'utf-8');
+    expect(content).toContain('test-app');
+    expect(content).toContain('TypeScript');
+  });
+
+  it('config.yaml includes file naming when provided', async () => {
+    const answers: InitAnswers = {
+      ...defaultAnswers,
+      agent: 'continue',
+      fileNaming: 'kebab-case',
+    };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, '.continue', 'config.yaml'), 'utf-8');
+    expect(content).toContain('kebab-case');
+  });
+
+  it('config.yaml includes database when not "none"', async () => {
+    const answers: InitAnswers = {
+      ...defaultAnswers,
+      agent: 'continue',
+      database: 'PostgreSQL',
+    };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, '.continue', 'config.yaml'), 'utf-8');
+    expect(content).toContain('PostgreSQL');
+  });
+});
+
+describe('runInit with cursor agent', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('creates .cursor/rules/ralph.md when agent is cursor', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'cursor' };
+    const result = await runInit(tmpDir, answers);
+    const filePath = path.join(tmpDir, '.cursor', 'rules', 'ralph.md');
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(result.created).toContain('.cursor/rules/ralph.md');
+  });
+
+  it('does not create .claude/CLAUDE.md when agent is cursor', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'cursor' };
+    await runInit(tmpDir, answers);
+    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(false);
+  });
+
+  it('ralph.md contains project name and config', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'cursor' };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, '.cursor', 'rules', 'ralph.md'), 'utf-8');
+    expect(content).toContain('# test-app');
+    expect(content).toContain('**Language**: TypeScript');
+  });
+
+  it('ralph.md includes file naming when provided', async () => {
+    const answers: InitAnswers = {
+      ...defaultAnswers,
+      agent: 'cursor',
+      fileNaming: 'kebab-case',
+    };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, '.cursor', 'rules', 'ralph.md'), 'utf-8');
+    expect(content).toContain('**File naming**: kebab-case');
+  });
+
+  it('ralph.md includes database when not "none"', async () => {
+    const answers: InitAnswers = {
+      ...defaultAnswers,
+      agent: 'cursor',
+      database: 'PostgreSQL',
+    };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, '.cursor', 'rules', 'ralph.md'), 'utf-8');
+    expect(content).toContain('**Database**: PostgreSQL');
+  });
+});
+
 describe('run (CLI entry point)', () => {
   it('exports a run function', async () => {
     const mod = await import('../commands/init.js');

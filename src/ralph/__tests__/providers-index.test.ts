@@ -4,6 +4,8 @@ import { ensureProvidersRegistered, resetProviderInit } from '../providers/index
 import { claudeProvider } from '../providers/claude.js';
 import { geminiProvider } from '../providers/gemini.js';
 import { codexProvider } from '../providers/codex.js';
+import { continueProvider } from '../providers/continue.js';
+import { cursorProvider } from '../providers/cursor.js';
 
 describe('ensureProvidersRegistered', () => {
   beforeEach(() => {
@@ -26,14 +28,24 @@ describe('ensureProvidersRegistered', () => {
     expect(getProvider('codex')).toBe(codexProvider);
   });
 
+  it('registers the continue provider', () => {
+    ensureProvidersRegistered();
+    expect(getProvider('continue')).toBe(continueProvider);
+  });
+
+  it('registers the cursor provider', () => {
+    ensureProvidersRegistered();
+    expect(getProvider('cursor')).toBe(cursorProvider);
+  });
+
   it('is idempotent — calling twice does not throw', () => {
     ensureProvidersRegistered();
     ensureProvidersRegistered();
-    expect(listProviders()).toEqual(['claude', 'gemini', 'codex']);
+    expect(listProviders()).toEqual(['claude', 'gemini', 'codex', 'continue', 'cursor']);
   });
 
-  it('registers claude, gemini, and codex as built-in providers', () => {
+  it('registers all five built-in providers', () => {
     ensureProvidersRegistered();
-    expect(listProviders()).toEqual(['claude', 'gemini', 'codex']);
+    expect(listProviders()).toEqual(['claude', 'gemini', 'codex', 'continue', 'cursor']);
   });
 });
