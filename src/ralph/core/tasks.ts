@@ -14,6 +14,7 @@ export interface Task {
   cost: string | undefined;
   blocked: boolean;
   description: string;
+  producesCount: number;
 }
 
 function extractField(content: string, field: string): string | undefined {
@@ -25,6 +26,16 @@ function extractField(content: string, field: string): string | undefined {
 function parseDeps(raw: string | undefined): string[] {
   if (!raw || raw.toLowerCase() === 'none') return [];
   return raw.split(',').map((d) => d.trim());
+}
+
+function countProduces(content: string): number {
+  const idx = content.indexOf('\n## Produces');
+  if (idx === -1) return 0;
+  const after = content.slice(idx + '\n## Produces'.length);
+  const nextSection = after.indexOf('\n## ');
+  const section = nextSection === -1 ? after : after.slice(0, nextSection);
+  const lines = section.split('\n');
+  return lines.filter((line) => /^\s*-\s+/.test(line)).length;
 }
 
 function extractDescription(content: string): string {
@@ -48,6 +59,7 @@ export function parseTaskFile(filename: string, content: string): Task {
   const cost = extractField(content, 'Cost');
   const blocked = /^## Blocked/m.test(content);
   const description = extractDescription(content);
+  const producesCount = countProduces(content);
 
   return {
     id,
@@ -62,6 +74,7 @@ export function parseTaskFile(filename: string, content: string): Task {
     cost,
     blocked,
     description,
+    producesCount,
   };
 }
 

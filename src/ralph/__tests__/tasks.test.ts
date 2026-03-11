@@ -134,6 +134,7 @@ describe('parseTaskFile', () => {
       cost: '$10.56',
       blocked: false,
       description: 'Set up the project infrastructure.',
+      producesCount: 1,
     });
   });
 
@@ -152,6 +153,7 @@ describe('parseTaskFile', () => {
       cost: undefined,
       blocked: false,
       description: 'Parse task files.',
+      producesCount: 1,
     });
   });
 
@@ -178,6 +180,39 @@ describe('parseTaskFile', () => {
     expect(task.commit).toBeUndefined();
     expect(task.cost).toBeUndefined();
     expect(task.blocked).toBe(false);
+  });
+
+  it('counts items in Produces section', () => {
+    const task = parseTaskFile('T-000.md', DONE_TASK);
+    expect(task.producesCount).toBe(1);
+  });
+
+  it('returns 0 producesCount when Produces section is missing', () => {
+    const task = parseTaskFile('T-010.md', MINIMAL_TASK);
+    expect(task.producesCount).toBe(0);
+  });
+
+  it('counts multiple produces items', () => {
+    const content = `# T-020: Multi produce
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+Test task.
+
+## Produces
+
+- \`src/a.ts\`
+- \`src/b.ts\`
+- \`src/c.ts\`
+- Tests
+`;
+    const task = parseTaskFile('T-020.md', content);
+    expect(task.producesCount).toBe(4);
   });
 
   it('extracts the task ID from the heading, not filename', () => {
