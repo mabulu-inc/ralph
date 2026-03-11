@@ -10,6 +10,7 @@ import {
   findLatestLogFile,
   extractTaskIdFromLog,
   formatMonitorOutput,
+  renderDashboard,
   run,
   type RunResult,
 } from '../commands/monitor.js';
@@ -181,6 +182,7 @@ describe('ralph monitor (run)', () => {
   let logsDir: string;
   let tasksDir: string;
   let logSpy: ReturnType<typeof vi.spyOn>;
+  let clearSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'ralph-monitor-test-'));
@@ -189,10 +191,12 @@ describe('ralph monitor (run)', () => {
     await mkdir(logsDir, { recursive: true });
     await mkdir(tasksDir, { recursive: true });
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    clearSpy = vi.spyOn(console, 'clear').mockImplementation(() => {});
   });
 
   afterEach(async () => {
     logSpy.mockRestore();
+    clearSpy.mockRestore();
     await rm(dir, { recursive: true, force: true });
   });
 
@@ -292,5 +296,53 @@ describe('ralph monitor (run)', () => {
     expect(result.watching).toBe(true);
     result.stop!();
     vi.useRealTimers();
+  });
+
+  it('clears the screen on initial render in watch mode', async () => {
+    vi.useFakeTimers();
+
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: Task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+
+    const result: RunResult = await run(['-w', '-i', '1'], dir);
+
+    // Initial render should clear the screen
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+
+    result.stop!();
+    vi.useRealTimers();
+  });
+
+  it('does not clear the screen in non-watch mode', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: Task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+
+    await run([], dir);
+
+    expect(clearSpy).not.toHaveBeenCalled();
+  });
+
+  it('renderDashboard returns formatted output for display', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+    await writeFile(
+      join(tasksDir, 'T-002.md'),
+      `# T-002: Second task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: T-001\n- **PRD Reference**: §2\n\n## Description\n\nPending.\n`,
+    );
+
+    const output = await renderDashboard(tasksDir, logsDir);
+    expect(output).toContain('1/2');
+    expect(output).toContain('50%');
+  });
+
+  it('renderDashboard returns error message for missing tasks dir', async () => {
+    const output = await renderDashboard(join(dir, 'nonexistent'), logsDir);
+    expect(output).toBe('No tasks directory found');
   });
 });
