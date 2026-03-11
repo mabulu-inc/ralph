@@ -83,8 +83,8 @@
 - [x] T-048: Add --json flag to ralph monitor for machine-readable output — $0.61
 - [x] T-049: Improve monitor phase timeline with per-phase durations and live timer — $0.99
 
-## 3 — Hardening
+## 3 — Hardening ($0.31)
 
-- [ ] T-050: Remove --no-db flag dead code
+- [x] T-050: Remove --no-db flag dead code — $0.31
 
-**Grand Total: $39.70**
+**Grand Total: $40.01**
