@@ -25,12 +25,18 @@ export interface InitAnswers {
   fileNaming?: string;
   agent?: string;
   model?: string;
-  overwrite?: boolean;
+}
+
+export type OnConflict = (relativePath: string) => Promise<boolean>;
+
+export interface InitOptions {
+  onConflict?: OnConflict;
 }
 
 export interface InitResult {
   created: string[];
   skipped: string[];
+  overwritten: string[];
 }
 
 function isNodeLanguage(language: string): boolean {
@@ -63,7 +69,7 @@ async function writeFile(
   rootDir: string,
   relativePath: string,
   content: string,
-  overwrite: boolean,
+  onConflict: OnConflict | undefined,
   result: InitResult,
 ): Promise<void> {
   const fullPath = path.join(rootDir, relativePath);
@@ -71,14 +77,30 @@ async function writeFile(
 
   await fs.mkdir(dir, { recursive: true });
 
-  if (!overwrite) {
-    try {
-      await fs.access(fullPath);
+  let existing: string | undefined;
+  try {
+    existing = await fs.readFile(fullPath, 'utf-8');
+  } catch {
+    // File doesn't exist, proceed to create
+  }
+
+  if (existing !== undefined) {
+    if (existing === content) {
       result.skipped.push(relativePath);
       return;
-    } catch {
-      // File doesn't exist, proceed to write
     }
+
+    if (onConflict) {
+      const shouldOverwrite = await onConflict(relativePath);
+      if (shouldOverwrite) {
+        await fs.writeFile(fullPath, content);
+        result.overwritten.push(relativePath);
+        return;
+      }
+    }
+
+    result.skipped.push(relativePath);
+    return;
   }
 
   await fs.writeFile(fullPath, content);
@@ -102,25 +124,78 @@ async function updatePackageJson(rootDir: string, answers: InitAnswers): Promise
   await fs.writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 }
 
-export async function runInit(rootDir: string, answers: InitAnswers): Promise<InitResult> {
-  const config = buildTemplateConfig(answers);
-  const overwrite = answers.overwrite ?? false;
-  const result: InitResult = { created: [], skipped: [] };
+export async function loadExistingDefaults(rootDir: string): Promise<Partial<InitAnswers>> {
+  const defaults: Partial<InitAnswers> = {};
 
-  await writeFile(rootDir, 'docs/PRD.md', generatePrd(config.projectName), overwrite, result);
-  await writeFile(rootDir, 'docs/RALPH-METHODOLOGY.md', generateMethodology(), overwrite, result);
-  await writeFile(rootDir, 'docs/tasks/T-000.md', generateTask000(config), overwrite, result);
+  // Try to get projectName from package.json, then fall back to directory name
+  const pkgPath = path.join(rootDir, 'package.json');
+  try {
+    const raw = await fs.readFile(pkgPath, 'utf-8');
+    const pkg = JSON.parse(raw);
+    if (pkg.name && typeof pkg.name === 'string') {
+      defaults.projectName = pkg.name;
+    }
+  } catch {
+    // No package.json — fall back to directory name
+  }
+
+  if (!defaults.projectName) {
+    defaults.projectName = path.basename(rootDir);
+  }
+
+  // Load config values from ralph.config.json
+  const configPath = path.join(rootDir, 'ralph.config.json');
+  try {
+    const raw = await fs.readFile(configPath, 'utf-8');
+    const config = JSON.parse(raw) as Record<string, unknown>;
+
+    const stringFields: (keyof InitAnswers)[] = [
+      'language',
+      'packageManager',
+      'testingFramework',
+      'qualityCheck',
+      'testCommand',
+      'agent',
+      'model',
+      'fileNaming',
+      'database',
+    ];
+
+    for (const field of stringFields) {
+      if (typeof config[field] === 'string') {
+        (defaults as Record<string, unknown>)[field] = config[field];
+      }
+    }
+  } catch {
+    // No ralph.config.json
+  }
+
+  return defaults;
+}
+
+export async function runInit(
+  rootDir: string,
+  answers: InitAnswers,
+  options?: InitOptions,
+): Promise<InitResult> {
+  const config = buildTemplateConfig(answers);
+  const onConflict = options?.onConflict;
+  const result: InitResult = { created: [], skipped: [], overwritten: [] };
+
+  await writeFile(rootDir, 'docs/PRD.md', generatePrd(config.projectName), onConflict, result);
+  await writeFile(rootDir, 'docs/RALPH-METHODOLOGY.md', generateMethodology(), onConflict, result);
+  await writeFile(rootDir, 'docs/tasks/T-000.md', generateTask000(config), onConflict, result);
   const agent = answers.agent ?? 'claude';
   if (agent === 'gemini') {
-    await writeFile(rootDir, 'GEMINI.md', generateGeminiMd(config), overwrite, result);
+    await writeFile(rootDir, 'GEMINI.md', generateGeminiMd(config), onConflict, result);
   } else if (agent === 'codex') {
-    await writeFile(rootDir, 'AGENTS.md', generateAgentsMd(config), overwrite, result);
+    await writeFile(rootDir, 'AGENTS.md', generateAgentsMd(config), onConflict, result);
   } else if (agent === 'continue') {
     await writeFile(
       rootDir,
       '.continue/config.yaml',
       generateContinueYaml(config),
-      overwrite,
+      onConflict,
       result,
     );
   } else if (agent === 'cursor') {
@@ -128,20 +203,20 @@ export async function runInit(rootDir: string, answers: InitAnswers): Promise<In
       rootDir,
       '.cursor/rules/ralph.md',
       generateCursorRules(config),
-      overwrite,
+      onConflict,
       result,
     );
   } else {
-    await writeFile(rootDir, '.claude/CLAUDE.md', generateClaudeMd(config), overwrite, result);
+    await writeFile(rootDir, '.claude/CLAUDE.md', generateClaudeMd(config), onConflict, result);
   }
-  await writeFile(rootDir, 'docs/prompts/boot.md', defaultBootPromptTemplate(), overwrite, result);
-  await writeFile(rootDir, 'docs/prompts/rules.md', generateRules(config), overwrite, result);
+  await writeFile(rootDir, 'docs/prompts/boot.md', defaultBootPromptTemplate(), onConflict, result);
+  await writeFile(rootDir, 'docs/prompts/rules.md', generateRules(config), onConflict, result);
 
   await writeFile(
     rootDir,
     'ralph.config.json',
     generateRalphConfigJson(config, agent, answers.model),
-    overwrite,
+    onConflict,
     result,
   );
 
@@ -159,22 +234,46 @@ function prompt(rl: readline.Interface, question: string, defaultValue?: string)
   });
 }
 
-async function promptForAnswers(): Promise<InitAnswers> {
+function promptYesNo(rl: readline.Interface, question: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    rl.question(`${question} (y/N): `, (answer) => {
+      resolve(answer.trim().toLowerCase() === 'y');
+    });
+  });
+}
+
+async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAnswers> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   try {
-    const projectName = await prompt(rl, 'Project name');
-    const language = await prompt(rl, 'Language', 'TypeScript');
-    const packageManager = await prompt(rl, 'Package manager', 'pnpm');
-    const testingFramework = await prompt(rl, 'Test framework', 'Vitest');
-    const qualityCheck = await prompt(rl, 'Check command', `${packageManager} check`);
-    const testCommand = await prompt(rl, 'Test command', `${packageManager} test`);
-    const database = await prompt(rl, 'Database', 'none');
-    const agent = await prompt(rl, 'AI agent (claude, gemini, codex, continue, cursor)', 'claude');
-    const model = await prompt(rl, 'Model (optional)', '');
+    const projectName = await prompt(rl, 'Project name', defaults.projectName);
+    const language = await prompt(rl, 'Language', defaults.language ?? 'TypeScript');
+    const packageManager = await prompt(rl, 'Package manager', defaults.packageManager ?? 'pnpm');
+    const testingFramework = await prompt(
+      rl,
+      'Test framework',
+      defaults.testingFramework ?? 'Vitest',
+    );
+    const qualityCheck = await prompt(
+      rl,
+      'Check command',
+      defaults.qualityCheck ?? `${packageManager} check`,
+    );
+    const testCommand = await prompt(
+      rl,
+      'Test command',
+      defaults.testCommand ?? `${packageManager} test`,
+    );
+    const database = await prompt(rl, 'Database', defaults.database ?? 'none');
+    const agent = await prompt(
+      rl,
+      'AI agent (claude, gemini, codex, continue, cursor)',
+      defaults.agent ?? 'claude',
+    );
+    const model = await prompt(rl, 'Model (optional)', defaults.model ?? '');
 
     return {
       projectName,
@@ -202,11 +301,26 @@ export async function run(args: string[]): Promise<void> {
     return;
   } else {
     console.log('Initializing a new Ralph project...\n');
-    answers = await promptForAnswers();
+    const cwd = process.cwd();
+    const defaults = await loadExistingDefaults(cwd);
+    answers = await promptForAnswers(defaults);
   }
 
   const cwd = process.cwd();
-  const result = await runInit(cwd, answers);
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const onConflict: OnConflict = async (relativePath: string) => {
+    const shouldOverwrite = await promptYesNo(rl, `File ${relativePath} has changed. Overwrite?`);
+    return shouldOverwrite;
+  };
+
+  const result = await runInit(cwd, answers, { onConflict });
+
+  rl.close();
 
   console.log('');
   if (result.created.length > 0) {
@@ -216,8 +330,15 @@ export async function run(args: string[]): Promise<void> {
     }
   }
 
+  if (result.overwritten.length > 0) {
+    console.log('Overwritten:');
+    for (const file of result.overwritten) {
+      console.log(`  ${file}`);
+    }
+  }
+
   if (result.skipped.length > 0) {
-    console.log('Skipped (already exist):');
+    console.log('Skipped (unchanged):');
     for (const file of result.skipped) {
       console.log(`  ${file}`);
     }

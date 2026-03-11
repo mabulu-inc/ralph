@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
-import { runInit, type InitAnswers } from '../commands/init.js';
+import { runInit, loadExistingDefaults, type InitAnswers } from '../commands/init.js';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'ralph-init-'));
@@ -94,10 +94,10 @@ describe('runInit', () => {
     expect(result.created).toContain('docs/prompts/boot.md');
     expect(result.created).toContain('docs/prompts/rules.md');
     expect(result.skipped).toHaveLength(0);
+    expect(result.overwritten).toHaveLength(0);
   });
 
-  it('skips existing files and reports them', async () => {
-    // Pre-create one of the files
+  it('skips existing file with different content when no onConflict provided', async () => {
     const docsDir = path.join(tmpDir, 'docs');
     fs.mkdirSync(docsDir, { recursive: true });
     fs.writeFileSync(path.join(docsDir, 'PRD.md'), '# Existing PRD\n');
@@ -105,21 +105,57 @@ describe('runInit', () => {
     const result = await runInit(tmpDir, defaultAnswers);
     expect(result.skipped).toContain('docs/PRD.md');
     expect(result.created).not.toContain('docs/PRD.md');
-    // The existing file should not be overwritten
+    expect(result.overwritten).not.toContain('docs/PRD.md');
     const content = fs.readFileSync(path.join(docsDir, 'PRD.md'), 'utf-8');
     expect(content).toBe('# Existing PRD\n');
   });
 
-  it('overwrites existing files when overwrite is true', async () => {
+  it('skips silently when existing file content matches generated content', async () => {
+    // First init to create files
+    await runInit(tmpDir, defaultAnswers);
+    const prdContent = fs.readFileSync(path.join(tmpDir, 'docs', 'PRD.md'), 'utf-8');
+
+    // Second init — same answers, file content matches
+    const onConflict = async () => true;
+    const result = await runInit(tmpDir, defaultAnswers, { onConflict });
+    // PRD.md should be skipped (unchanged), onConflict should NOT have been called for it
+    expect(result.skipped).toContain('docs/PRD.md');
+    expect(result.overwritten).not.toContain('docs/PRD.md');
+    // Content should remain the same
+    const content = fs.readFileSync(path.join(tmpDir, 'docs', 'PRD.md'), 'utf-8');
+    expect(content).toBe(prdContent);
+  });
+
+  it('calls onConflict when file exists with different content', async () => {
     const docsDir = path.join(tmpDir, 'docs');
     fs.mkdirSync(docsDir, { recursive: true });
     fs.writeFileSync(path.join(docsDir, 'PRD.md'), '# Existing PRD\n');
 
-    const result = await runInit(tmpDir, { ...defaultAnswers, overwrite: true });
-    expect(result.created).toContain('docs/PRD.md');
-    expect(result.skipped).toHaveLength(0);
+    const conflictFiles: string[] = [];
+    const onConflict = async (filePath: string) => {
+      conflictFiles.push(filePath);
+      return true;
+    };
+
+    const result = await runInit(tmpDir, defaultAnswers, { onConflict });
+    expect(conflictFiles).toContain('docs/PRD.md');
+    expect(result.overwritten).toContain('docs/PRD.md');
+    expect(result.skipped).not.toContain('docs/PRD.md');
     const content = fs.readFileSync(path.join(docsDir, 'PRD.md'), 'utf-8');
     expect(content).toContain('# test-app');
+  });
+
+  it('skips file when onConflict returns false', async () => {
+    const docsDir = path.join(tmpDir, 'docs');
+    fs.mkdirSync(docsDir, { recursive: true });
+    fs.writeFileSync(path.join(docsDir, 'PRD.md'), '# Existing PRD\n');
+
+    const onConflict = async () => false;
+    const result = await runInit(tmpDir, defaultAnswers, { onConflict });
+    expect(result.skipped).toContain('docs/PRD.md');
+    expect(result.overwritten).not.toContain('docs/PRD.md');
+    const content = fs.readFileSync(path.join(docsDir, 'PRD.md'), 'utf-8');
+    expect(content).toBe('# Existing PRD\n');
   });
 
   it('passes database config to task template when not "none"', async () => {
@@ -137,7 +173,6 @@ describe('runInit', () => {
   });
 
   it('adds ralph scripts to package.json for Node.js projects', async () => {
-    // Create a package.json in tmpDir
     const pkg = { name: 'test-app', version: '1.0.0', scripts: {} };
     fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify(pkg, null, 2));
 
@@ -158,7 +193,6 @@ describe('runInit', () => {
 
   it('does not fail when no package.json exists for Node.js projects', async () => {
     await runInit(tmpDir, defaultAnswers);
-    // Should complete without error, just skip package.json update
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'PRD.md'))).toBe(true);
   });
 });
@@ -391,20 +425,84 @@ describe('runInit creates ralph.config.json', () => {
     expect(config.model).toBeUndefined();
   });
 
-  it('respects overwrite flag for ralph.config.json', async () => {
-    fs.writeFileSync(path.join(tmpDir, 'ralph.config.json'), '{"existing": true}');
+  it('skips unchanged ralph.config.json silently on re-init', async () => {
+    await runInit(tmpDir, defaultAnswers);
     const result = await runInit(tmpDir, defaultAnswers);
     expect(result.skipped).toContain('ralph.config.json');
-    const content = fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8');
-    expect(content).toBe('{"existing": true}');
+    expect(result.overwritten).not.toContain('ralph.config.json');
   });
 
-  it('overwrites ralph.config.json when overwrite is true', async () => {
+  it('detects changed ralph.config.json and calls onConflict', async () => {
     fs.writeFileSync(path.join(tmpDir, 'ralph.config.json'), '{"existing": true}');
-    const result = await runInit(tmpDir, { ...defaultAnswers, overwrite: true });
-    expect(result.created).toContain('ralph.config.json');
+    const onConflict = async () => true;
+    const result = await runInit(tmpDir, defaultAnswers, { onConflict });
+    expect(result.overwritten).toContain('ralph.config.json');
     const config = JSON.parse(fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8'));
     expect(config.language).toBe('TypeScript');
+  });
+});
+
+describe('loadExistingDefaults', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('returns only projectName when no ralph.config.json exists', async () => {
+    const defaults = await loadExistingDefaults(tmpDir);
+    expect(defaults).toEqual({ projectName: path.basename(tmpDir) });
+  });
+
+  it('loads config values from ralph.config.json', async () => {
+    const config = {
+      language: 'Python',
+      packageManager: 'pip',
+      testingFramework: 'pytest',
+      qualityCheck: 'make check',
+      testCommand: 'pytest',
+      agent: 'gemini',
+      model: 'gemini-2.5-pro',
+      fileNaming: 'snake_case',
+      database: 'PostgreSQL',
+    };
+    fs.writeFileSync(path.join(tmpDir, 'ralph.config.json'), JSON.stringify(config));
+
+    const defaults = await loadExistingDefaults(tmpDir);
+    expect(defaults.language).toBe('Python');
+    expect(defaults.packageManager).toBe('pip');
+    expect(defaults.testingFramework).toBe('pytest');
+    expect(defaults.qualityCheck).toBe('make check');
+    expect(defaults.testCommand).toBe('pytest');
+    expect(defaults.agent).toBe('gemini');
+    expect(defaults.model).toBe('gemini-2.5-pro');
+    expect(defaults.fileNaming).toBe('snake_case');
+    expect(defaults.database).toBe('PostgreSQL');
+  });
+
+  it('falls back to package.json name for projectName', async () => {
+    const pkg = { name: 'my-cool-app', version: '1.0.0' };
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify(pkg));
+
+    const defaults = await loadExistingDefaults(tmpDir);
+    expect(defaults.projectName).toBe('my-cool-app');
+  });
+
+  it('falls back to directory name for projectName when no package.json', async () => {
+    const defaults = await loadExistingDefaults(tmpDir);
+    expect(defaults.projectName).toBe(path.basename(tmpDir));
+  });
+
+  it('prefers package.json name over directory name', async () => {
+    const pkg = { name: 'pkg-name', version: '1.0.0' };
+    fs.writeFileSync(path.join(tmpDir, 'package.json'), JSON.stringify(pkg));
+
+    const defaults = await loadExistingDefaults(tmpDir);
+    expect(defaults.projectName).toBe('pkg-name');
   });
 });
 
