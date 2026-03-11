@@ -5,6 +5,7 @@ import { readConfig, type ProjectConfig } from '../core/config.js';
 import { discardUnstaged, getHeadSha, hasUnpushedCommits, pushToRemote } from '../core/git.js';
 import { spawnWithCapture, monitorProcess } from '../core/process.js';
 import { computeTaskComplexity, type ComplexityTier } from '../core/complexity.js';
+import { getTierScaling } from '../core/defaults.js';
 
 export interface LoopOptions {
   iterations: number;
@@ -28,15 +29,10 @@ export interface ScalingResult {
   timeout: number;
 }
 
-const TIER_SCALING: Record<ComplexityTier, { maxTurns: number; timeout: number }> = {
-  light: { maxTurns: 50, timeout: 600 },
-  standard: { maxTurns: 75, timeout: 900 },
-  heavy: { maxTurns: 125, timeout: 1200 },
-};
-
 export function scaleForComplexity(task: Task): ScalingResult {
   const tier = computeTaskComplexity(task);
-  return { tier, ...TIER_SCALING[tier] };
+  const tierScaling = getTierScaling();
+  return { tier, ...tierScaling[tier] };
 }
 
 export function parseLoopOptions(args: string[]): LoopOptions {

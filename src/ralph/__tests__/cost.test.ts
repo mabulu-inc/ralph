@@ -98,6 +98,16 @@ describe('aggregateUsage', () => {
 });
 
 describe('calculateCost', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   it('calculates cost using Claude pricing rates', () => {
     const usage = {
       input_tokens: 1_000_000,
@@ -108,6 +118,18 @@ describe('calculateCost', () => {
     const cost = calculateCost(usage);
     // Input: $3/MTok
     expect(cost).toBeCloseTo(3.0);
+  });
+
+  it('uses overridden pricing from env vars', () => {
+    process.env.RALPH_PRICE_INPUT = '10.0';
+    const usage = {
+      input_tokens: 1_000_000,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+      output_tokens: 0,
+    };
+    const cost = calculateCost(usage);
+    expect(cost).toBeCloseTo(10.0);
   });
 
   it('calculates output token cost', () => {

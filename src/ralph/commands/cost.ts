@@ -1,6 +1,7 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, isAbsolute } from 'node:path';
 import { scanTasks, type Task } from '../core/tasks.js';
+import { getPricing } from '../core/defaults.js';
 
 export interface TokenUsage {
   input_tokens: number;
@@ -14,12 +15,6 @@ interface CostEntry {
   usage: TokenUsage;
   cost: number;
 }
-
-// Claude Sonnet pricing (per million tokens)
-const PRICE_INPUT = 3.0;
-const PRICE_CACHE_WRITE = 3.75;
-const PRICE_CACHE_READ = 0.3;
-const PRICE_OUTPUT = 15.0;
 
 export function parseLogLine(line: string): TokenUsage | null {
   if (!line.trim()) return null;
@@ -55,11 +50,12 @@ export function aggregateUsage(entries: TokenUsage[]): TokenUsage {
 }
 
 export function calculateCost(usage: TokenUsage): number {
+  const pricing = getPricing();
   return (
-    (usage.input_tokens / 1_000_000) * PRICE_INPUT +
-    (usage.cache_creation_input_tokens / 1_000_000) * PRICE_CACHE_WRITE +
-    (usage.cache_read_input_tokens / 1_000_000) * PRICE_CACHE_READ +
-    (usage.output_tokens / 1_000_000) * PRICE_OUTPUT
+    (usage.input_tokens / 1_000_000) * pricing.input +
+    (usage.cache_creation_input_tokens / 1_000_000) * pricing.cacheWrite +
+    (usage.cache_read_input_tokens / 1_000_000) * pricing.cacheRead +
+    (usage.output_tokens / 1_000_000) * pricing.output
   );
 }
 

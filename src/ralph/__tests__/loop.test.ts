@@ -118,6 +118,16 @@ describe('parseLoopOptions', () => {
 });
 
 describe('scaleForComplexity', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   function taskWith(overrides: Partial<Task>): Task {
     return {
       id: 'T-001',
@@ -140,6 +150,13 @@ describe('scaleForComplexity', () => {
   it('returns light tier defaults for simple tasks', () => {
     const result = scaleForComplexity(taskWith({}));
     expect(result).toEqual({ tier: 'light', maxTurns: 50, timeout: 600 });
+  });
+
+  it('uses overridden tier scaling from env vars', () => {
+    process.env.RALPH_TIER_LIGHT_MAX_TURNS = '30';
+    process.env.RALPH_TIER_LIGHT_TIMEOUT = '400';
+    const result = scaleForComplexity(taskWith({}));
+    expect(result).toEqual({ tier: 'light', maxTurns: 30, timeout: 400 });
   });
 
   it('returns standard tier for tasks with 2-3 deps', () => {
