@@ -12,6 +12,10 @@ import {
   formatMonitorOutput,
   renderDashboard,
   run,
+  parseCurrentPhase,
+  parseLastLogLine,
+  readLogTail,
+  formatElapsed,
   type RunResult,
 } from '../commands/monitor.js';
 
@@ -145,6 +149,147 @@ describe('extractTaskIdFromLog', () => {
   });
 });
 
+describe('parseCurrentPhase', () => {
+  it('extracts the last phase name and timestamp from JSONL content', () => {
+    const content = [
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Boot"}]},"timestamp":"2026-03-10T12:00:00Z"}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"some work"}]},"timestamp":"2026-03-10T12:01:00Z"}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Red"}]},"timestamp":"2026-03-10T12:02:00Z"}',
+    ].join('\n');
+    const result = parseCurrentPhase(content);
+    expect(result).not.toBeNull();
+    expect(result!.phase).toBe('Red');
+    expect(result!.startedAt).toEqual(new Date('2026-03-10T12:02:00Z'));
+  });
+
+  it('returns null when no phases found', () => {
+    const content = '{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]}}\n';
+    expect(parseCurrentPhase(content)).toBeNull();
+  });
+
+  it('returns null for empty content', () => {
+    expect(parseCurrentPhase('')).toBeNull();
+  });
+
+  it('falls back to null timestamp when no timestamp in JSONL entry', () => {
+    const content = '{"type":"text","text":"[PHASE] Entering: Green"}\n';
+    const result = parseCurrentPhase(content);
+    expect(result).not.toBeNull();
+    expect(result!.phase).toBe('Green');
+    expect(result!.startedAt).toBeNull();
+  });
+
+  it('handles malformed JSON lines gracefully', () => {
+    const content = [
+      'not valid json',
+      '{"type":"text","text":"[PHASE] Entering: Boot"}',
+      'also not json',
+    ].join('\n');
+    const result = parseCurrentPhase(content);
+    expect(result).not.toBeNull();
+    expect(result!.phase).toBe('Boot');
+  });
+});
+
+describe('parseLastLogLine', () => {
+  it('extracts the last assistant text from JSONL content', () => {
+    const content = [
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"first line"}]}}',
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"second line"}]}}',
+      '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"last line of output"}]}}',
+    ].join('\n');
+    expect(parseLastLogLine(content)).toBe('last line of output');
+  });
+
+  it('returns null when no assistant text found', () => {
+    const content = '{"type":"tool_use","name":"read"}\n';
+    expect(parseLastLogLine(content)).toBeNull();
+  });
+
+  it('returns null for empty content', () => {
+    expect(parseLastLogLine('')).toBeNull();
+  });
+
+  it('extracts text from flat text entries too', () => {
+    const content = [
+      '{"type":"text","text":"some output here"}',
+      '{"type":"tool_use","name":"bash"}',
+    ].join('\n');
+    expect(parseLastLogLine(content)).toBe('some output here');
+  });
+
+  it('truncates long lines to specified width', () => {
+    const longText = 'a'.repeat(200);
+    const content = `{"type":"text","text":"${longText}"}\n`;
+    const result = parseLastLogLine(content, 80);
+    expect(result).not.toBeNull();
+    expect(result!.length).toBeLessThanOrEqual(80);
+    expect(result!.endsWith('…')).toBe(true);
+  });
+
+  it('does not truncate lines within width', () => {
+    const content = '{"type":"text","text":"short line"}\n';
+    expect(parseLastLogLine(content, 80)).toBe('short line');
+  });
+
+  it('strips markdown formatting', () => {
+    const content = '{"type":"text","text":"**bold** and _italic_ text"}\n';
+    expect(parseLastLogLine(content)).toBe('bold and italic text');
+  });
+});
+
+describe('readLogTail', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ralph-tail-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads the tail of a log file', async () => {
+    const logPath = join(dir, 'test.jsonl');
+    const lines = Array.from({ length: 100 }, (_, i) => `{"line":${i}}`);
+    await writeFile(logPath, lines.join('\n'));
+    const content = await readLogTail(logPath, 512);
+    expect(content.length).toBeLessThanOrEqual(512 + 200);
+    expect(content).toContain('"line":99');
+  });
+
+  it('reads the entire file when smaller than maxBytes', async () => {
+    const logPath = join(dir, 'small.jsonl');
+    await writeFile(logPath, '{"line":0}\n{"line":1}\n');
+    const content = await readLogTail(logPath, 8192);
+    expect(content).toContain('"line":0');
+    expect(content).toContain('"line":1');
+  });
+
+  it('returns empty string for nonexistent file', async () => {
+    const result = await readLogTail(join(dir, 'nope.jsonl'));
+    expect(result).toBe('');
+  });
+});
+
+describe('formatElapsed', () => {
+  it('formats seconds', () => {
+    expect(formatElapsed(30_000)).toBe('30s ago');
+  });
+
+  it('formats minutes and seconds', () => {
+    expect(formatElapsed(135_000)).toBe('2m 15s ago');
+  });
+
+  it('formats hours', () => {
+    expect(formatElapsed(3_661_000)).toBe('1h 1m ago');
+  });
+
+  it('handles zero', () => {
+    expect(formatElapsed(0)).toBe('0s ago');
+  });
+});
+
 describe('formatMonitorOutput', () => {
   it('formats complete monitor display', () => {
     const output = formatMonitorOutput({
@@ -154,6 +299,8 @@ describe('formatMonitorOutput', () => {
       currentTaskId: 'T-006',
       currentTaskTitle: 'Monitor command',
       phases: ['Boot', 'Red'],
+      currentPhaseStarted: null,
+      lastLogLine: null,
     });
     expect(output).toContain('RUNNING');
     expect(output).toContain('5/10');
@@ -170,10 +317,70 @@ describe('formatMonitorOutput', () => {
       currentTaskId: null,
       currentTaskTitle: null,
       phases: [],
+      currentPhaseStarted: null,
+      lastLogLine: null,
     });
     expect(output).toContain('STOPPED');
     expect(output).toContain('10/10');
     expect(output).not.toContain('Phase');
+  });
+
+  it('shows current phase with elapsed time', () => {
+    const twoMinutesAgo = new Date(Date.now() - 135_000);
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phases: ['Boot', 'Red', 'Green'],
+      currentPhaseStarted: twoMinutesAgo,
+      lastLogLine: null,
+    });
+    expect(output).toContain('Current phase: Green');
+    expect(output).toMatch(/\d+[ms].*ago/);
+  });
+
+  it('shows current phase without time when timestamp is null', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phases: ['Boot', 'Red'],
+      currentPhaseStarted: null,
+      lastLogLine: null,
+    });
+    expect(output).not.toContain('Current phase');
+  });
+
+  it('shows last log line', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phases: ['Boot'],
+      currentPhaseStarted: null,
+      lastLogLine: 'Writing test file...',
+    });
+    expect(output).toContain('Last output: Writing test file...');
+  });
+
+  it('does not show last log line when null', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phases: ['Boot'],
+      currentPhaseStarted: null,
+      lastLogLine: null,
+    });
+    expect(output).not.toContain('Last output');
   });
 });
 

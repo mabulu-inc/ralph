@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { open, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanTasks, countByStatus, type Task } from '../core/tasks.js';
 import { readPidFile } from '../core/pid-file.js';
@@ -49,6 +49,160 @@ export function extractTaskIdFromLog(filename: string): string | null {
   return match ? match[1] : null;
 }
 
+export async function readLogTail(filePath: string, maxBytes = 8192): Promise<string> {
+  try {
+    const stats = await stat(filePath);
+    const fileSize = stats.size;
+    if (fileSize === 0) return '';
+
+    const fh = await open(filePath, 'r');
+    try {
+      if (fileSize <= maxBytes) {
+        const buf = Buffer.alloc(fileSize);
+        await fh.read(buf, 0, fileSize, 0);
+        return buf.toString('utf-8');
+      }
+      const offset = fileSize - maxBytes;
+      const buf = Buffer.alloc(maxBytes);
+      await fh.read(buf, 0, maxBytes, offset);
+      const raw = buf.toString('utf-8');
+      // Drop the first partial line
+      const firstNewline = raw.indexOf('\n');
+      return firstNewline === -1 ? raw : raw.slice(firstNewline + 1);
+    } finally {
+      await fh.close();
+    }
+  } catch {
+    return '';
+  }
+}
+
+export interface PhaseInfo {
+  phase: string;
+  startedAt: Date | null;
+}
+
+function extractTextFromJsonLine(line: string): string | null {
+  try {
+    const obj = JSON.parse(line);
+    // Flat text entry: {"type":"text","text":"..."}
+    if (obj.type === 'text' && typeof obj.text === 'string') {
+      return obj.text;
+    }
+    // Nested message entry: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+    const content = obj.message?.content ?? obj.content;
+    if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block.type === 'text' && typeof block.text === 'string') {
+          return block.text;
+        }
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function extractTimestampFromJsonLine(line: string): Date | null {
+  try {
+    const obj = JSON.parse(line);
+    if (typeof obj.timestamp === 'string') {
+      const d = new Date(obj.timestamp);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const PHASE_INLINE_RE = /\[PHASE]\s*Entering:\s*(\w+)/;
+
+export function parseCurrentPhase(content: string): PhaseInfo | null {
+  if (!content) return null;
+  const lines = content.split('\n');
+  let lastPhase: string | null = null;
+  let lastTimestamp: Date | null = null;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const text = extractTextFromJsonLine(line);
+    if (text) {
+      const match = text.match(PHASE_INLINE_RE);
+      if (match) {
+        lastPhase = match[1];
+        lastTimestamp = extractTimestampFromJsonLine(line);
+      }
+    } else {
+      // Try raw text matching for non-JSON lines
+      const match = line.match(PHASE_INLINE_RE);
+      if (match) {
+        lastPhase = match[1];
+        lastTimestamp = null;
+      }
+    }
+  }
+
+  return lastPhase ? { phase: lastPhase, startedAt: lastTimestamp } : null;
+}
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/_(.+?)_/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/^#+\s+/gm, '')
+    .replace(/\[([^\]]+)]\([^)]+\)/g, '$1');
+}
+
+export function parseLastLogLine(content: string, maxWidth = 0): string | null {
+  if (!content) return null;
+  const lines = content.split('\n');
+  let lastText: string | null = null;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const text = extractTextFromJsonLine(line);
+    if (text && text.trim()) {
+      lastText = text.trim();
+    }
+  }
+
+  if (!lastText) return null;
+
+  lastText = stripMarkdown(lastText);
+
+  // Handle multiline: take the last non-empty line
+  const textLines = lastText.split('\n').filter((l) => l.trim());
+  if (textLines.length > 0) {
+    lastText = textLines[textLines.length - 1].trim();
+  }
+
+  if (maxWidth > 0 && lastText.length > maxWidth) {
+    return lastText.slice(0, maxWidth - 1) + '…';
+  }
+
+  return lastText;
+}
+
+export function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ago`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s ago`;
+  }
+  return `${seconds}s ago`;
+}
+
 export interface MonitorData {
   status: 'RUNNING' | 'STOPPED';
   done: number;
@@ -56,6 +210,8 @@ export interface MonitorData {
   currentTaskId: string | null;
   currentTaskTitle: string | null;
   phases: string[];
+  currentPhaseStarted: Date | null;
+  lastLogLine: string | null;
 }
 
 export function formatMonitorOutput(data: MonitorData): string {
@@ -70,6 +226,16 @@ export function formatMonitorOutput(data: MonitorData): string {
 
   if (data.phases.length > 0) {
     lines.push(`Phases: ${formatPhaseTimeline(data.phases)}`);
+  }
+
+  if (data.currentPhaseStarted && data.phases.length > 0) {
+    const elapsed = Date.now() - data.currentPhaseStarted.getTime();
+    const currentPhase = data.phases[data.phases.length - 1];
+    lines.push(`Current phase: ${currentPhase} (${formatElapsed(elapsed)})`);
+  }
+
+  if (data.lastLogLine) {
+    lines.push(`Last output: ${data.lastLogLine}`);
   }
 
   return lines.join('\n');
@@ -102,6 +268,8 @@ export async function renderDashboard(tasksDir: string, logsDir: string): Promis
   let currentTaskId: string | null = null;
   let currentTaskTitle: string | null = null;
   let phases: string[] = [];
+  let currentPhaseStarted: Date | null = null;
+  let lastLogLine: string | null = null;
 
   const latestLog = await findLatestLogFile(logsDir);
   if (latestLog) {
@@ -113,11 +281,15 @@ export async function renderDashboard(tasksDir: string, logsDir: string): Promis
       }
     }
 
-    try {
-      const logContent = await readFile(join(logsDir, latestLog), 'utf-8');
+    const logContent = await readLogTail(join(logsDir, latestLog));
+    if (logContent) {
       phases = parsePhases(logContent);
-    } catch {
-      // log file may have been removed
+      const phaseInfo = parseCurrentPhase(logContent);
+      if (phaseInfo) {
+        currentPhaseStarted = phaseInfo.startedAt;
+      }
+      const termWidth = process.stdout.columns || 80;
+      lastLogLine = parseLastLogLine(logContent, termWidth);
     }
   }
 
@@ -128,6 +300,8 @@ export async function renderDashboard(tasksDir: string, logsDir: string): Promis
     currentTaskId,
     currentTaskTitle,
     phases,
+    currentPhaseStarted,
+    lastLogLine,
   });
 }
 
