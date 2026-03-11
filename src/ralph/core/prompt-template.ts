@@ -2,18 +2,21 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Task } from './tasks.js';
 import type { ProjectConfig } from './config.js';
+import { extractPrdSections } from './prd-extractor.js';
 
 export function interpolateTemplate(
   template: string,
   task: Task,
   config: ProjectConfig,
   projectRules = '',
+  prdContent = '',
 ): string {
   const vars: Record<string, string> = {
     'task.id': task.id,
     'task.title': task.title,
     'task.description': task.description,
     'task.prdReference': task.prdReference,
+    'task.prdContent': prdContent,
     'task.touches': task.touches.length > 0 ? task.touches.join(', ') : 'not specified',
     'task.hints': task.hints,
     'config.language': config.language,
@@ -55,5 +58,16 @@ export async function loadAndInterpolate(
     // rules.md doesn't exist — resolve to empty string
   }
 
-  return interpolateTemplate(template, task, config, projectRules);
+  let prdContent = '';
+  if (task.prdReference) {
+    try {
+      const prdPath = join(projectDir, 'docs', 'PRD.md');
+      const prdText = await readFile(prdPath, 'utf-8');
+      prdContent = extractPrdSections(prdText, task.prdReference);
+    } catch {
+      // PRD.md doesn't exist — resolve to empty string
+    }
+  }
+
+  return interpolateTemplate(template, task, config, projectRules, prdContent);
 }

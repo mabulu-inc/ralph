@@ -149,6 +149,18 @@ describe('interpolateTemplate', () => {
     const result = interpolateTemplate(template, mockTask, mockConfig);
     expect(result).toBe('Rules: []');
   });
+
+  it('replaces {{task.prdContent}} with provided PRD content', () => {
+    const template = 'PRD Content: {{task.prdContent}}';
+    const result = interpolateTemplate(template, mockTask, mockConfig, '', 'Section body here');
+    expect(result).toBe('PRD Content: Section body here');
+  });
+
+  it('replaces {{task.prdContent}} with empty string when not provided', () => {
+    const template = 'PRD: [{{task.prdContent}}]';
+    const result = interpolateTemplate(template, mockTask, mockConfig);
+    expect(result).toBe('PRD: []');
+  });
 });
 
 describe('loadAndInterpolate', () => {
@@ -203,5 +215,37 @@ describe('loadAndInterpolate', () => {
 
     const result = await loadAndInterpolate(tmpDir, mockTask, mockConfig);
     expect(result).toBe('Rules: []');
+  });
+
+  it('injects PRD section content as {{task.prdContent}}', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'PRD: {{task.prdContent}}');
+    await writeFile(
+      join(tmpDir, 'docs', 'PRD.md'),
+      '## 3. Commands\n\n### 3.1 Init\n\nInit details.\n\n### 3.2 Loop\n\nLoop details.\n',
+    );
+
+    const taskWith32 = { ...mockTask, prdReference: '§3.1' };
+    const result = await loadAndInterpolate(tmpDir, taskWith32, mockConfig);
+    expect(result).toContain('Init details.');
+    expect(result).not.toContain('Loop details.');
+  });
+
+  it('resolves {{task.prdContent}} to empty string when PRD.md is missing', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'PRD: [{{task.prdContent}}]');
+
+    const result = await loadAndInterpolate(tmpDir, mockTask, mockConfig);
+    expect(result).toBe('PRD: []');
+  });
+
+  it('resolves {{task.prdContent}} to empty string when prdReference is empty', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'PRD: [{{task.prdContent}}]');
+    await writeFile(join(tmpDir, 'docs', 'PRD.md'), '## 1. Stuff\n\nContent.\n');
+
+    const taskNoRef = { ...mockTask, prdReference: '' };
+    const result = await loadAndInterpolate(tmpDir, taskNoRef, mockConfig);
+    expect(result).toBe('PRD: []');
   });
 });
