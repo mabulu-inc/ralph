@@ -161,6 +161,25 @@ describe('interpolateTemplate', () => {
     const result = interpolateTemplate(template, mockTask, mockConfig);
     expect(result).toBe('PRD: []');
   });
+
+  it('replaces {{codebaseIndex}} with provided codebase index', () => {
+    const template = 'Index:\n{{codebaseIndex}}';
+    const result = interpolateTemplate(
+      template,
+      mockTask,
+      mockConfig,
+      '',
+      '',
+      'src/foo.ts: Foo, Bar',
+    );
+    expect(result).toBe('Index:\nsrc/foo.ts: Foo, Bar');
+  });
+
+  it('replaces {{codebaseIndex}} with empty string when not provided', () => {
+    const template = 'Index: [{{codebaseIndex}}]';
+    const result = interpolateTemplate(template, mockTask, mockConfig);
+    expect(result).toBe('Index: []');
+  });
 });
 
 describe('loadAndInterpolate', () => {
@@ -247,5 +266,24 @@ describe('loadAndInterpolate', () => {
     const taskNoRef = { ...mockTask, prdReference: '' };
     const result = await loadAndInterpolate(tmpDir, taskNoRef, mockConfig);
     expect(result).toBe('PRD: []');
+  });
+
+  it('generates and injects codebase index as {{codebaseIndex}}', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await mkdir(join(tmpDir, 'src'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'Index:\n{{codebaseIndex}}');
+    await writeFile(join(tmpDir, 'src', 'helper.ts'), 'export function doStuff() {}\n');
+
+    const result = await loadAndInterpolate(tmpDir, mockTask, mockConfig);
+    expect(result).toContain('src/helper.ts');
+    expect(result).toContain('doStuff');
+  });
+
+  it('resolves {{codebaseIndex}} to empty string when no source files exist', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'Index: [{{codebaseIndex}}]');
+
+    const result = await loadAndInterpolate(tmpDir, mockTask, mockConfig);
+    expect(result).toBe('Index: []');
   });
 });

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { Task } from './tasks.js';
 import type { ProjectConfig } from './config.js';
 import { extractPrdSections } from './prd-extractor.js';
+import { generateCodebaseIndex } from './codebase-index.js';
 
 export function interpolateTemplate(
   template: string,
@@ -10,6 +11,7 @@ export function interpolateTemplate(
   config: ProjectConfig,
   projectRules = '',
   prdContent = '',
+  codebaseIndex = '',
 ): string {
   const vars: Record<string, string> = {
     'task.id': task.id,
@@ -27,9 +29,10 @@ export function interpolateTemplate(
     'config.fileNaming': config.fileNaming ?? '',
     'config.database': config.database ?? '',
     'project.rules': projectRules,
+    codebaseIndex,
   };
 
-  return template.replace(/\{\{(\w+\.\w+)\}\}/g, (match, key: string) => {
+  return template.replace(/\{\{(\w+(?:\.\w+)?)\}\}/g, (match, key: string) => {
     return key in vars ? vars[key] : match;
   });
 }
@@ -69,5 +72,7 @@ export async function loadAndInterpolate(
     }
   }
 
-  return interpolateTemplate(template, task, config, projectRules, prdContent);
+  const codebaseIndex = await generateCodebaseIndex(projectDir, config.language, task.touches);
+
+  return interpolateTemplate(template, task, config, projectRules, prdContent, codebaseIndex);
 }
