@@ -18,6 +18,7 @@ export interface Task {
   depends: string[];
   prdReference: string;
   touches: string[];
+  hints: string;
   completed: string | undefined;
   commit: string | undefined;
   cost: string | undefined;
@@ -58,6 +59,7 @@ export function parseTaskFile(filename: string, content: string): Task {
   const blocked = hasSection(tree, 'Blocked');
   const touchesRaw = extractFieldFromAst(tree, 'Touches');
   const touches = parseTouches(touchesRaw);
+  const hints = extractSectionFirstParagraph(tree, 'Hints');
   const description = extractSectionFirstParagraph(tree, 'Description');
   const producesCount = countListItemsInSection(tree, 'Produces');
 
@@ -70,6 +72,7 @@ export function parseTaskFile(filename: string, content: string): Task {
     depends,
     prdReference,
     touches,
+    hints,
     completed,
     commit,
     cost,

@@ -22,6 +22,7 @@ const mockTask: Task = {
   description: 'Implement feature X as described in the PRD.',
   producesCount: 2,
   touches: ['src/core/foo.ts', 'src/core/bar.ts'],
+  hints: 'Follow the existing pattern in core/tasks.ts.',
 };
 
 const mockConfig: ProjectConfig = {
@@ -104,6 +105,19 @@ describe('interpolateTemplate', () => {
     const template = 'Touches: {{task.touches}}';
     const result = interpolateTemplate(template, taskNoTouches, mockConfig);
     expect(result).toBe('Touches: not specified');
+  });
+
+  it('replaces task.hints with hints text', () => {
+    const template = 'Hints: {{task.hints}}';
+    const result = interpolateTemplate(template, mockTask, mockConfig);
+    expect(result).toBe('Hints: Follow the existing pattern in core/tasks.ts.');
+  });
+
+  it('replaces task.hints with empty string when no hints', () => {
+    const taskNoHints = { ...mockTask, hints: '' };
+    const template = 'Hints: {{task.hints}}';
+    const result = interpolateTemplate(template, taskNoHints, mockConfig);
+    expect(result).toBe('Hints: ');
   });
 
   it('leaves unknown variables as-is', () => {

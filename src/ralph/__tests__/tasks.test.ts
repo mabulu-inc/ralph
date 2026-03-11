@@ -104,6 +104,47 @@ Depends on two tasks.
 - \`src/multi.ts\`
 `;
 
+const TASK_WITH_HINTS = `# T-062: Task with hints
+
+- **Status**: TODO
+- **Milestone**: 2 — Core
+- **Depends**: none
+- **PRD Reference**: §3
+
+## Description
+
+A task that has implementation hints.
+
+## Hints
+
+Follow the existing pattern in core/tasks.ts. The markdown utility should handle section extraction.
+
+## Produces
+
+- \`src/core/tasks.ts\`
+`;
+
+const TASK_WITH_TOUCHES_AND_HINTS = `# T-063: Task with touches and hints
+
+- **Status**: TODO
+- **Milestone**: 2 — Core
+- **Depends**: none
+- **PRD Reference**: §3
+- **Touches**: \`src/core/tasks.ts\`, \`src/core/config.ts\`
+
+## Description
+
+A task with both touches and hints.
+
+## Hints
+
+Use extractSectionFirstParagraph for parsing.
+
+## Produces
+
+- \`src/core/tasks.ts\`
+`;
+
 const TASK_WITH_TOUCHES = `# T-060: Task with touches
 
 - **Status**: TODO
@@ -153,6 +194,7 @@ describe('parseTaskFile', () => {
       description: 'Set up the project infrastructure.',
       producesCount: 1,
       touches: [],
+      hints: '',
     });
   });
 
@@ -173,6 +215,7 @@ describe('parseTaskFile', () => {
       description: 'Parse task files.',
       producesCount: 1,
       touches: [],
+      hints: '',
     });
   });
 
@@ -347,6 +390,24 @@ Single touch file.
 `;
     const task = parseTaskFile('T-061.md', content);
     expect(task.touches).toEqual(['src/single.ts']);
+  });
+
+  it('parses hints section as free text', () => {
+    const task = parseTaskFile('T-062.md', TASK_WITH_HINTS);
+    expect(task.hints).toBe(
+      'Follow the existing pattern in core/tasks.ts. The markdown utility should handle section extraction.',
+    );
+  });
+
+  it('returns empty string when hints section is absent', () => {
+    const task = parseTaskFile('T-010.md', MINIMAL_TASK);
+    expect(task.hints).toBe('');
+  });
+
+  it('parses both touches and hints together', () => {
+    const task = parseTaskFile('T-063.md', TASK_WITH_TOUCHES_AND_HINTS);
+    expect(task.touches).toEqual(['src/core/tasks.ts', 'src/core/config.ts']);
+    expect(task.hints).toBe('Use extractSectionFirstParagraph for parsing.');
   });
 
   it('parses fields with mixed bold styles (underscore bold)', () => {

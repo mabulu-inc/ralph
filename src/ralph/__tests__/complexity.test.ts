@@ -18,6 +18,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     description: 'A simple task.',
     producesCount: 1,
     touches: [],
+    hints: '',
     ...overrides,
   };
 }

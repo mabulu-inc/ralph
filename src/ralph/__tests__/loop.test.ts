@@ -152,6 +152,7 @@ describe('scaleForComplexity', () => {
       description: 'A simple task.',
       producesCount: 1,
       touches: [],
+      hints: '',
       ...overrides,
     };
   }
