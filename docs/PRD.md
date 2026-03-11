@@ -192,17 +192,18 @@ Real-time status display showing progress and current activity.
 - Ralph status (RUNNING / BETWEEN TASKS / STOPPED)
 - Progress bar with task counts (done/total, percentage)
 - Current task ID and title
-- Phase timeline for the active iteration (Boot → Red → Green → Verify → Commit)
-- Current phase with elapsed time (e.g., "Current phase: Green (2m 15s ago)")
+- Phase timeline with per-phase durations — completed phases show elapsed time (e.g., `● Boot (45s) → ● Red (1m 12s) → ● Green (2:30) → ○ Verify → ○ Commit`), the active phase shows a live timer that updates each refresh
+- Phases should always display when RUNNING (even if no phase markers found yet — show all as `○`)
 - Last log line — the most recent text content from the agent, truncated to fit the terminal width, so the user can follow along in real time
 
 **Behavior:**
 
 - Watch mode renders as a live dashboard — clear the screen before each refresh so the display updates in place rather than streaming appended output
+- Default refresh interval is 1 second for a responsive live timer
 
 **Options:**
 
-- `-w, --watch` — continuous mode, refresh every N seconds (default: 5)
+- `-w, --watch` — continuous mode, refresh every N seconds (default: 1)
 - `-i, --interval <seconds>` — refresh interval for watch mode
 
 ### 3.4 `ralph kill`
