@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { assertSafeGitRef, assertSafeFilePath, assertSafeShellArg } from './sanitize.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -49,6 +50,7 @@ export async function findCommitByMessage(
   cwd: string,
   pattern: string,
 ): Promise<LogEntry | undefined> {
+  assertSafeShellArg(pattern);
   const args = ['log', '--oneline', '--all', `--grep=${pattern}`];
   const output = await run(cwd, args);
   if (!output) return undefined;
@@ -68,6 +70,8 @@ export async function hasUnpushedCommits(
   remote: string,
   branch: string,
 ): Promise<boolean> {
+  assertSafeGitRef(remote);
+  assertSafeGitRef(branch);
   try {
     const output = await run(cwd, ['rev-list', `${remote}/${branch}..HEAD`]);
     return output !== '';
@@ -80,10 +84,16 @@ export async function hasUnpushedCommits(
 }
 
 export async function pushToRemote(cwd: string, remote: string, branch: string): Promise<void> {
+  assertSafeGitRef(remote);
+  assertSafeGitRef(branch);
   await run(cwd, ['push', remote, branch]);
 }
 
 export async function addAndCommit(cwd: string, files: string[], message: string): Promise<string> {
+  for (const file of files) {
+    assertSafeFilePath(file);
+  }
+  assertSafeShellArg(message);
   await run(cwd, ['add', ...files]);
   await run(cwd, ['commit', '-m', message]);
   return run(cwd, ['rev-parse', 'HEAD']);
@@ -97,6 +107,7 @@ export async function detectTrackingRemote(
   cwd: string,
   branch: string,
 ): Promise<string | undefined> {
+  assertSafeGitRef(branch);
   try {
     return await run(cwd, ['config', `branch.${branch}.remote`]);
   } catch {
