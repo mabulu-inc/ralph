@@ -44,6 +44,31 @@ export function spawnWithCapture(
   return child;
 }
 
+/**
+ * Recursively find all descendant PIDs of a given process.
+ */
+export async function getChildPids(pid: number): Promise<number[]> {
+  try {
+    const { stdout } = await execFileAsync('pgrep', ['-P', String(pid)]);
+    const directChildren = stdout
+      .trim()
+      .split('\n')
+      .filter((line) => line.trim() !== '')
+      .map((line) => parseInt(line.trim(), 10))
+      .filter((p) => !isNaN(p));
+
+    const allDescendants: number[] = [];
+    for (const childPid of directChildren) {
+      allDescendants.push(childPid);
+      const grandchildren = await getChildPids(childPid);
+      allDescendants.push(...grandchildren);
+    }
+    return allDescendants;
+  } catch {
+    return [];
+  }
+}
+
 export async function killProcessTree(pid: number, options?: KillOptions): Promise<void> {
   const gracePeriodMs = options?.gracePeriodMs ?? 5000;
 
@@ -54,22 +79,32 @@ export async function killProcessTree(pid: number, options?: KillOptions): Promi
     return; // already dead
   }
 
-  // Send SIGTERM first
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    return;
-  }
+  // Collect all descendant PIDs before sending signals
+  const descendants = await getChildPids(pid);
 
-  // Wait for graceful shutdown or force kill
-  const dead = await waitForDeath(pid, gracePeriodMs);
-  if (!dead) {
+  // All PIDs to kill: descendants first (bottom-up), then the root
+  const allPids = [...descendants.reverse(), pid];
+
+  // Send SIGTERM to all
+  for (const p of allPids) {
     try {
-      process.kill(pid, 'SIGKILL');
+      process.kill(p, 'SIGTERM');
     } catch {
       // already dead
     }
-    await waitForDeath(pid, 1000);
+  }
+
+  // Wait for graceful shutdown or force kill each
+  for (const p of allPids) {
+    const dead = await waitForDeath(p, gracePeriodMs);
+    if (!dead) {
+      try {
+        process.kill(p, 'SIGKILL');
+      } catch {
+        // already dead
+      }
+      await waitForDeath(p, 1000);
+    }
   }
 }
 

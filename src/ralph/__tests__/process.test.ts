@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import {
   spawnWithCapture,
   killProcessTree,
+  getChildPids,
   findProcessesByPattern,
   monitorProcess,
 } from '../core/process.js';
@@ -109,12 +110,48 @@ describe('process management', () => {
       cleanupPids.push(pid);
 
       // Give children time to start
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 300));
+
+      // Find child PIDs before killing
+      const childPids = await getChildPids(pid);
+      expect(childPids.length).toBeGreaterThan(0);
+      for (const cpid of childPids) {
+        cleanupPids.push(cpid);
+      }
 
       await killProcessTree(pid);
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 300));
+
+      // Parent should be dead
+      expect(() => process.kill(pid, 0)).toThrow();
+
+      // All children should also be dead
+      for (const cpid of childPids) {
+        expect(() => process.kill(cpid, 0)).toThrow();
+      }
+    });
+
+    it('kills nested grandchild processes', async () => {
+      // sh spawns sh which spawns sleep — a 3-level tree
+      const child = spawnWithCapture('sh', ['-c', 'sh -c "sleep 60 & wait" & wait'], {});
+      const pid = child.pid!;
+      cleanupPids.push(pid);
+
+      await new Promise((r) => setTimeout(r, 300));
+
+      // Collect all descendants
+      const allDescendants = await getChildPids(pid);
+      for (const cpid of allDescendants) {
+        cleanupPids.push(cpid);
+      }
+
+      await killProcessTree(pid);
+      await new Promise((r) => setTimeout(r, 300));
 
       expect(() => process.kill(pid, 0)).toThrow();
+      for (const cpid of allDescendants) {
+        expect(() => process.kill(cpid, 0)).toThrow();
+      }
     });
 
     it('does not throw when process is already dead', async () => {
@@ -146,6 +183,46 @@ describe('process management', () => {
       await new Promise((r) => setTimeout(r, 100));
 
       expect(() => process.kill(pid, 0)).toThrow();
+    });
+  });
+
+  describe('getChildPids', () => {
+    it('returns child PIDs of a process', async () => {
+      const child = spawnWithCapture('sh', ['-c', 'sleep 60 & sleep 60 & wait'], {});
+      const pid = child.pid!;
+      cleanupPids.push(pid);
+
+      await new Promise((r) => setTimeout(r, 300));
+
+      const childPids = await getChildPids(pid);
+      expect(childPids.length).toBeGreaterThanOrEqual(2);
+
+      for (const cpid of childPids) {
+        cleanupPids.push(cpid);
+        expect(cpid).toBeGreaterThan(0);
+        expect(cpid).not.toBe(pid);
+      }
+
+      // Cleanup
+      await killProcessTree(pid);
+    });
+
+    it('returns empty array for a process with no children', async () => {
+      const child = spawnWithCapture('sleep', ['60'], {});
+      const pid = child.pid!;
+      cleanupPids.push(pid);
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const childPids = await getChildPids(pid);
+      expect(childPids).toEqual([]);
+
+      await killProcessTree(pid);
+    });
+
+    it('returns empty array for a nonexistent PID', async () => {
+      const childPids = await getChildPids(999999999);
+      expect(childPids).toEqual([]);
     });
   });
 
