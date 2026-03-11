@@ -26,6 +26,24 @@ LOG_DIR=".ralph-logs"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TASKS_DIR="$PROJECT_DIR/docs/tasks"
 
+# --- Git remote/branch configuration ---
+# Auto-detect or use RALPH_GIT_REMOTE / RALPH_GIT_BRANCH env vars
+detect_git_target() {
+  if [[ -n "${RALPH_GIT_BRANCH:-}" ]]; then
+    GIT_BRANCH="$RALPH_GIT_BRANCH"
+  else
+    GIT_BRANCH=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+  fi
+
+  if [[ -n "${RALPH_GIT_REMOTE:-}" ]]; then
+    GIT_REMOTE="$RALPH_GIT_REMOTE"
+  else
+    local tracking_remote
+    tracking_remote=$(git -C "$PROJECT_DIR" config "branch.${GIT_BRANCH}.remote" 2>/dev/null || true)
+    GIT_REMOTE="${tracking_remote:-origin}"
+  fi
+}
+
 # --- Ensure subprocesses can't hang on PG connections ---
 export PGCONNECT_TIMEOUT=5
 
@@ -368,6 +386,9 @@ cleanup() {
 trap 'cleanup; exit 0' INT TERM
 trap cleanup EXIT
 
+# --- Detect git target ---
+detect_git_target
+
 # --- Config summary ---
 next_task=$(get_next_task)
 done_count=$(count_tasks_by_status DONE)
@@ -401,9 +422,9 @@ if ! git -C "$PROJECT_DIR" diff --quiet 2>/dev/null; then
 fi
 
 # Push any unpushed commits from a previous run
-if ! git -C "$PROJECT_DIR" diff --quiet origin/main..HEAD 2>/dev/null; then
+if ! git -C "$PROJECT_DIR" diff --quiet "${GIT_REMOTE}/${GIT_BRANCH}..HEAD" 2>/dev/null; then
   echo -e "${CYAN}[$(timestamp)] Pushing unpushed commits from a previous run...${RESET}"
-  git -C "$PROJECT_DIR" push origin main
+  git -C "$PROJECT_DIR" push "$GIT_REMOTE" "$GIT_BRANCH"
 fi
 
 # --- The Loop ---
@@ -624,9 +645,9 @@ WORKFLOW:
     git -C "$PROJECT_DIR" commit -m "Update task metadata" --no-verify 2>/dev/null || true
 
   # Push any unpushed commits
-  if ! git -C "$PROJECT_DIR" diff --quiet origin/main..HEAD 2>/dev/null; then
-    echo -e "${CYAN}[$(timestamp)] Pushing commits to origin...${RESET}"
-    git -C "$PROJECT_DIR" push origin main
+  if ! git -C "$PROJECT_DIR" diff --quiet "${GIT_REMOTE}/${GIT_BRANCH}..HEAD" 2>/dev/null; then
+    echo -e "${CYAN}[$(timestamp)] Pushing commits to ${GIT_REMOTE}/${GIT_BRANCH}...${RESET}"
+    git -C "$PROJECT_DIR" push "$GIT_REMOTE" "$GIT_BRANCH"
   fi
 
   # Brief delay

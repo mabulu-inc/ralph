@@ -2,7 +2,13 @@ import { access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanTasks, findNextTask, allDone, countByStatus, type Task } from '../core/tasks.js';
 import { readConfig, type ProjectConfig } from '../core/config.js';
-import { discardUnstaged, getHeadSha, hasUnpushedCommits, pushToRemote } from '../core/git.js';
+import {
+  discardUnstaged,
+  getHeadSha,
+  hasUnpushedCommits,
+  pushToRemote,
+  resolveGitTarget,
+} from '../core/git.js';
 import { spawnWithCapture, monitorProcess } from '../core/process.js';
 import { computeTaskComplexity, type ComplexityTier } from '../core/complexity.js';
 import { getTierScaling } from '../core/defaults.js';
@@ -302,14 +308,15 @@ export async function run(args: string[], cwd?: string): Promise<void> {
 
     if (opts.push) {
       try {
-        const unpushed = await hasUnpushedCommits(projectDir, 'origin', 'main');
+        const gitTarget = await resolveGitTarget(projectDir);
+        const unpushed = await hasUnpushedCommits(projectDir, gitTarget.remote, gitTarget.branch);
         if (unpushed) {
-          await pushToRemote(projectDir, 'origin', 'main');
-          console.log(`[Iteration ${iteration}] Pushed to origin/main`);
+          await pushToRemote(projectDir, gitTarget.remote, gitTarget.branch);
+          console.log(`[Iteration ${iteration}] Pushed to ${gitTarget.remote}/${gitTarget.branch}`);
         }
       } catch (err) {
         console.error(
-          `[Iteration ${iteration}] Warning: failed to push to origin/main: ${err instanceof Error ? err.message : String(err)}`,
+          `[Iteration ${iteration}] Warning: failed to push: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }

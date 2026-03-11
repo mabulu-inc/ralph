@@ -88,3 +88,33 @@ export async function addAndCommit(cwd: string, files: string[], message: string
   await run(cwd, ['commit', '-m', message]);
   return run(cwd, ['rev-parse', 'HEAD']);
 }
+
+export async function detectCurrentBranch(cwd: string): Promise<string> {
+  return run(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']);
+}
+
+export async function detectTrackingRemote(
+  cwd: string,
+  branch: string,
+): Promise<string | undefined> {
+  try {
+    return await run(cwd, ['config', `branch.${branch}.remote`]);
+  } catch {
+    return undefined;
+  }
+}
+
+export interface GitTarget {
+  remote: string;
+  branch: string;
+}
+
+export async function resolveGitTarget(cwd: string): Promise<GitTarget> {
+  const branch = process.env.RALPH_GIT_BRANCH ?? (await detectCurrentBranch(cwd));
+  const envRemote = process.env.RALPH_GIT_REMOTE;
+  if (envRemote) {
+    return { remote: envRemote, branch };
+  }
+  const trackingRemote = await detectTrackingRemote(cwd, branch);
+  return { remote: trackingRemote ?? 'origin', branch };
+}

@@ -17,6 +17,7 @@ vi.mock('../core/git.js', () => ({
   hasUnpushedCommits: vi.fn(),
   pushToRemote: vi.fn(),
   isWorkingTreeClean: vi.fn(),
+  resolveGitTarget: vi.fn(),
 }));
 
 import * as processModule from '../core/process.js';
@@ -36,6 +37,7 @@ const getHeadSha = vi.mocked(gitModule.getHeadSha);
 const discardUnstaged = vi.mocked(gitModule.discardUnstaged);
 const hasUnpushedCommits = vi.mocked(gitModule.hasUnpushedCommits);
 const pushToRemote = vi.mocked(gitModule.pushToRemote);
+const resolveGitTarget = vi.mocked(gitModule.resolveGitTarget);
 
 const CLAUDE_MD = `## Project-Specific Config\n\n- **Language**: TypeScript\n- **Package manager**: pnpm\n- **Testing framework**: Vitest\n- **Quality check**: \`pnpm check\`\n- **Test command**: \`pnpm test\`\n`;
 const TODO_TASK = `# T-001: Test task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nA test task.\n`;
@@ -338,6 +340,7 @@ describe('run', () => {
     getHeadSha.mockResolvedValue('abc1234');
     hasUnpushedCommits.mockResolvedValue(false);
     pushToRemote.mockResolvedValue(undefined);
+    resolveGitTarget.mockResolvedValue({ remote: 'origin', branch: 'main' });
   });
 
   afterEach(async () => {
@@ -496,7 +499,22 @@ describe('run', () => {
     const { run } = await import('../commands/loop.js');
     await run(['-n', '1'], tmpDir);
 
+    expect(resolveGitTarget).toHaveBeenCalledWith(tmpDir);
     expect(pushToRemote).toHaveBeenCalledWith(tmpDir, 'origin', 'main');
+  });
+
+  it('uses resolved git target for push operations', async () => {
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    hasUnpushedCommits.mockResolvedValue(true);
+    resolveGitTarget.mockResolvedValue({ remote: 'upstream', branch: 'develop' });
+
+    const { run } = await import('../commands/loop.js');
+    await run(['-n', '1'], tmpDir);
+
+    expect(hasUnpushedCommits).toHaveBeenCalledWith(tmpDir, 'upstream', 'develop');
+    expect(pushToRemote).toHaveBeenCalledWith(tmpDir, 'upstream', 'develop');
   });
 
   it('skips push when --no-push is set', async () => {

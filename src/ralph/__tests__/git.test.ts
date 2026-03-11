@@ -12,6 +12,9 @@ import {
   hasUnpushedCommits,
   pushToRemote,
   addAndCommit,
+  detectCurrentBranch,
+  detectTrackingRemote,
+  resolveGitTarget,
 } from '../core/git.js';
 
 function git(cwd: string, args: string): string {
@@ -228,6 +231,99 @@ describe('git operations', () => {
       const sha = await addAndCommit(dir, ['b.txt'], 'commit msg');
       const headSha = git(dir, 'rev-parse HEAD');
       expect(sha).toBe(headSha);
+    });
+  });
+
+  describe('detectCurrentBranch', () => {
+    it('returns the current branch name', async () => {
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      const branch = await detectCurrentBranch(dir);
+      expect(typeof branch).toBe('string');
+      expect(branch.length).toBeGreaterThan(0);
+    });
+
+    it('returns the branch after switching', async () => {
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      git(dir, 'checkout -b feature-branch');
+      const branch = await detectCurrentBranch(dir);
+      expect(branch).toBe('feature-branch');
+    });
+  });
+
+  describe('detectTrackingRemote', () => {
+    it('returns the tracking remote for a branch', async () => {
+      const bare = await mkdtemp(join(tmpdir(), 'ralph-bare-'));
+      git(bare, 'init --bare');
+      git(dir, `remote add upstream ${bare}`);
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      git(dir, 'push -u upstream HEAD:main');
+      const remote = await detectTrackingRemote(dir, 'main');
+      expect(remote).toBe('upstream');
+      await rm(bare, { recursive: true, force: true });
+    });
+
+    it('returns undefined when no tracking remote is configured', async () => {
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      const remote = await detectTrackingRemote(dir, 'main');
+      expect(remote).toBeUndefined();
+    });
+  });
+
+  describe('resolveGitTarget', () => {
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    it('auto-detects branch and defaults remote to origin', async () => {
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      const target = await resolveGitTarget(dir);
+      expect(target.branch).toBeTruthy();
+      expect(target.remote).toBe('origin');
+    });
+
+    it('uses tracking remote when available', async () => {
+      const bare = await mkdtemp(join(tmpdir(), 'ralph-bare-'));
+      git(bare, 'init --bare');
+      git(dir, `remote add upstream ${bare}`);
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      git(dir, 'push -u upstream HEAD:main');
+      const target = await resolveGitTarget(dir);
+      expect(target.remote).toBe('upstream');
+      await rm(bare, { recursive: true, force: true });
+    });
+
+    it('respects RALPH_GIT_REMOTE env var', async () => {
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      process.env.RALPH_GIT_REMOTE = 'custom-remote';
+      const target = await resolveGitTarget(dir);
+      expect(target.remote).toBe('custom-remote');
+    });
+
+    it('respects RALPH_GIT_BRANCH env var', async () => {
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      process.env.RALPH_GIT_BRANCH = 'develop';
+      const target = await resolveGitTarget(dir);
+      expect(target.branch).toBe('develop');
+    });
+
+    it('env vars take precedence over auto-detection', async () => {
+      const bare = await mkdtemp(join(tmpdir(), 'ralph-bare-'));
+      git(bare, 'init --bare');
+      git(dir, `remote add upstream ${bare}`);
+      await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      git(dir, 'push -u upstream HEAD:main');
+      process.env.RALPH_GIT_REMOTE = 'override-remote';
+      process.env.RALPH_GIT_BRANCH = 'override-branch';
+      const target = await resolveGitTarget(dir);
+      expect(target.remote).toBe('override-remote');
+      expect(target.branch).toBe('override-branch');
+      await rm(bare, { recursive: true, force: true });
     });
   });
 });
