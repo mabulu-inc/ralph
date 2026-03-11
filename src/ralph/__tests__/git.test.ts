@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -153,10 +153,13 @@ describe('git operations', () => {
   });
 
   describe('hasUnpushedCommits', () => {
-    it('returns false when there is no remote', async () => {
+    it('returns false and warns to stderr when there is no remote', async () => {
       await makeCommit(dir, 'a.txt', 'v1', 'initial');
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const result = await hasUnpushedCommits(dir, 'origin', 'main');
       expect(result).toBe(false);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('unpushed'));
+      errorSpy.mockRestore();
     });
 
     it('detects unpushed commits', async () => {

@@ -71,7 +71,10 @@ export async function hasUnpushedCommits(
   try {
     const output = await run(cwd, ['rev-list', `${remote}/${branch}..HEAD`]);
     return output !== '';
-  } catch {
+  } catch (err) {
+    console.error(
+      `[ralph] Failed to check unpushed commits for ${remote}/${branch}: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return false;
   }
 }

@@ -227,15 +227,19 @@ export async function run(args: string[], cwd?: string): Promise<void> {
 
     try {
       await discardUnstaged(projectDir);
-    } catch {
-      // May fail if working tree is clean or not a git repo
+    } catch (err) {
+      console.error(
+        `[Iteration ${iteration}] Warning: failed to discard unstaged changes: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     let headBefore: string | undefined;
     try {
       headBefore = await getHeadSha(projectDir);
-    } catch {
-      // not a git repo
+    } catch (err) {
+      console.error(
+        `[Iteration ${iteration}] Warning: failed to get HEAD SHA before iteration: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     const prompt = generateBootPrompt(nextTask, config);
@@ -286,8 +290,10 @@ export async function run(args: string[], cwd?: string): Promise<void> {
     let headAfter: string | undefined;
     try {
       headAfter = await getHeadSha(projectDir);
-    } catch {
-      // not a git repo
+    } catch (err) {
+      console.error(
+        `[Iteration ${iteration}] Warning: failed to get HEAD SHA after iteration: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     if (headBefore && headAfter && headBefore !== headAfter) {
@@ -301,8 +307,10 @@ export async function run(args: string[], cwd?: string): Promise<void> {
           await pushToRemote(projectDir, 'origin', 'main');
           console.log(`[Iteration ${iteration}] Pushed to origin/main`);
         }
-      } catch {
-        // push may fail
+      } catch (err) {
+        console.error(
+          `[Iteration ${iteration}] Warning: failed to push to origin/main: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 

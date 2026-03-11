@@ -538,4 +538,70 @@ describe('run', () => {
       }),
     );
   });
+
+  it('warns to stderr when discardUnstaged fails', async () => {
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    discardUnstaged.mockRejectedValueOnce(new Error('git checkout failed'));
+
+    const { run } = await import('../commands/loop.js');
+    await run(['-n', '1', '--no-push'], tmpDir);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('discard unstaged'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('git checkout failed'));
+  });
+
+  it('warns to stderr when getHeadSha fails before iteration', async () => {
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockRejectedValueOnce(new Error('not a git repository'));
+
+    const { run } = await import('../commands/loop.js');
+    await run(['-n', '1', '--no-push'], tmpDir);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('HEAD SHA'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('not a git repository'));
+  });
+
+  it('warns to stderr when getHeadSha fails after iteration', async () => {
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValueOnce('abc1234').mockRejectedValueOnce(new Error('rev-parse error'));
+
+    const { run } = await import('../commands/loop.js');
+    await run(['-n', '1', '--no-push'], tmpDir);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('HEAD SHA'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('rev-parse error'));
+  });
+
+  it('warns to stderr when push fails', async () => {
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    hasUnpushedCommits.mockResolvedValue(true);
+    pushToRemote.mockRejectedValueOnce(new Error('authentication failed'));
+
+    const { run } = await import('../commands/loop.js');
+    await run(['-n', '1'], tmpDir);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('push'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('authentication failed'));
+  });
+
+  it('warns to stderr when hasUnpushedCommits fails', async () => {
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    hasUnpushedCommits.mockRejectedValueOnce(new Error('remote not found'));
+
+    const { run } = await import('../commands/loop.js');
+    await run(['-n', '1'], tmpDir);
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('push'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('remote not found'));
+  });
 });
