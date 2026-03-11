@@ -236,6 +236,62 @@ describe('runInit with gemini agent', () => {
   });
 });
 
+describe('runInit with codex agent', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('creates AGENTS.md when agent is codex', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'codex' };
+    const result = await runInit(tmpDir, answers);
+    const filePath = path.join(tmpDir, 'AGENTS.md');
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(result.created).toContain('AGENTS.md');
+  });
+
+  it('does not create .claude/CLAUDE.md when agent is codex', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'codex' };
+    await runInit(tmpDir, answers);
+    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(false);
+  });
+
+  it('AGENTS.md contains project name and config', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'codex' };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf-8');
+    expect(content).toContain('# test-app');
+    expect(content).toContain('**Language**: TypeScript');
+  });
+
+  it('AGENTS.md includes file naming when provided', async () => {
+    const answers: InitAnswers = {
+      ...defaultAnswers,
+      agent: 'codex',
+      fileNaming: 'kebab-case',
+    };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf-8');
+    expect(content).toContain('**File naming**: kebab-case');
+  });
+
+  it('AGENTS.md includes database when not "none"', async () => {
+    const answers: InitAnswers = {
+      ...defaultAnswers,
+      agent: 'codex',
+      database: 'PostgreSQL',
+    };
+    await runInit(tmpDir, answers);
+    const content = fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf-8');
+    expect(content).toContain('**Database**: PostgreSQL');
+  });
+});
+
 describe('run (CLI entry point)', () => {
   it('exports a run function', async () => {
     const mod = await import('../commands/init.js');

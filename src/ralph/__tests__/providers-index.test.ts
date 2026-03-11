@@ -3,6 +3,7 @@ import { resetRegistry, getProvider, listProviders } from '../core/agent-provide
 import { ensureProvidersRegistered, resetProviderInit } from '../providers/index.js';
 import { claudeProvider } from '../providers/claude.js';
 import { geminiProvider } from '../providers/gemini.js';
+import { codexProvider } from '../providers/codex.js';
 
 describe('ensureProvidersRegistered', () => {
   beforeEach(() => {
@@ -20,14 +21,19 @@ describe('ensureProvidersRegistered', () => {
     expect(getProvider('gemini')).toBe(geminiProvider);
   });
 
+  it('registers the codex provider', () => {
+    ensureProvidersRegistered();
+    expect(getProvider('codex')).toBe(codexProvider);
+  });
+
   it('is idempotent — calling twice does not throw', () => {
     ensureProvidersRegistered();
     ensureProvidersRegistered();
-    expect(listProviders()).toEqual(['claude', 'gemini']);
+    expect(listProviders()).toEqual(['claude', 'gemini', 'codex']);
   });
 
-  it('registers claude and gemini as built-in providers', () => {
+  it('registers claude, gemini, and codex as built-in providers', () => {
     ensureProvidersRegistered();
-    expect(listProviders()).toEqual(['claude', 'gemini']);
+    expect(listProviders()).toEqual(['claude', 'gemini', 'codex']);
   });
 });
