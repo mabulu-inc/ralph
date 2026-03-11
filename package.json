@@ -19,6 +19,8 @@
     "check": "pnpm lint && pnpm format && pnpm typecheck && pnpm build && pnpm test:coverage",
     "milestones": "bash scripts/update-milestones.sh",
     "ralph": "bash scripts/ralph.sh",
+    "ralph:evolve": "bash scripts/ralph-evolve.sh",
+    "ralph:reinit": "bash scripts/ralph-reinit.sh",
     "ralph:kill": "bash scripts/ralph-kill.sh",
     "shas": "bash scripts/update-shas.sh",
     "cost": "bash scripts/calc-cost.sh",
