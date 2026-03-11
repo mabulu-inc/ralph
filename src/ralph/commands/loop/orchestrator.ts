@@ -8,6 +8,9 @@ import { spawnWithCapture, monitorProcess } from '../../core/process.js';
 import { writePidFile, removePidFile } from '../../core/pid-file.js';
 import { loadLayeredPrompt } from '../../core/prompt-template.js';
 import { buildRetryContext } from '../../core/retry-context.js';
+import { run as runShas } from '../shas.js';
+import { run as runCost } from '../cost.js';
+import { run as runMilestones } from '../milestones.js';
 import { LoopGitService } from './git-service.js';
 import { scaleForComplexity, type LoopOptions } from './index.js';
 
@@ -171,6 +174,8 @@ export class LoopOrchestrator {
       if (headBefore && headAfter && headBefore !== headAfter) {
         console.log(`[Iteration ${iteration}] Commit detected: ${headAfter.slice(0, 7)}`);
         lastFailedTaskId = undefined;
+
+        await this.postIterationUpdates(iteration);
       } else {
         lastFailedTaskId = nextTask.id;
       }
@@ -192,5 +197,34 @@ export class LoopOrchestrator {
     }
 
     console.log('Loop complete');
+  }
+
+  private async postIterationUpdates(iteration: number): Promise<void> {
+    const updates = [
+      { name: 'shas', fn: () => runShas([], this.projectDir) },
+      { name: 'cost', fn: () => runCost(['--update-tasks'], this.projectDir) },
+      { name: 'milestones', fn: () => runMilestones([], this.projectDir) },
+    ];
+
+    for (const update of updates) {
+      try {
+        await update.fn();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[Iteration ${iteration}] Warning: post-iteration ${update.name} failed: ${msg}`,
+        );
+      }
+    }
+
+    const sha = await this.gitService.commitMetadata(
+      ['docs/tasks', 'docs/MILESTONES.md'],
+      'Update task metadata',
+    );
+    if (sha) {
+      console.log(`[Iteration ${iteration}] Metadata commit: ${sha.slice(0, 7)}`);
+    } else {
+      console.error(`[Iteration ${iteration}] Warning: metadata commit failed (nothing to commit)`);
+    }
   }
 }

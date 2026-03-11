@@ -1,4 +1,5 @@
 import {
+  addAndCommit,
   discardUnstaged,
   getHeadSha,
   hasUnpushedCommits,
@@ -36,6 +37,15 @@ export class LoopGitService {
       return { sha };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  async commitMetadata(files: string[], message: string): Promise<string | undefined> {
+    try {
+      const sha = await addAndCommit(this.projectDir, files, message);
+      return sha;
+    } catch {
+      return undefined;
     }
   }
 

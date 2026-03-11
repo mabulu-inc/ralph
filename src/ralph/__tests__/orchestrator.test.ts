@@ -22,10 +22,26 @@ vi.mock('../core/git.js', () => ({
   pushToRemote: vi.fn(),
   isWorkingTreeClean: vi.fn(),
   resolveGitTarget: vi.fn(),
+  addAndCommit: vi.fn(),
+}));
+
+vi.mock('../commands/shas.js', () => ({
+  run: vi.fn(),
+}));
+
+vi.mock('../commands/cost.js', () => ({
+  run: vi.fn(),
+}));
+
+vi.mock('../commands/milestones.js', () => ({
+  run: vi.fn(),
 }));
 
 import * as processModule from '../core/process.js';
 import * as gitModule from '../core/git.js';
+import * as shasModule from '../commands/shas.js';
+import * as costModule from '../commands/cost.js';
+import * as milestonesModule from '../commands/milestones.js';
 import { LoopOrchestrator } from '../commands/loop/orchestrator.js';
 import type { LoopOptions } from '../commands/loop/index.js';
 import { registerProvider, resetRegistry, type AgentProvider } from '../core/agent-provider.js';
@@ -38,6 +54,10 @@ const getHeadSha = vi.mocked(gitModule.getHeadSha);
 const hasUnpushedCommits = vi.mocked(gitModule.hasUnpushedCommits);
 const pushToRemote = vi.mocked(gitModule.pushToRemote);
 const resolveGitTarget = vi.mocked(gitModule.resolveGitTarget);
+const addAndCommit = vi.mocked(gitModule.addAndCommit);
+const shasRun = vi.mocked(shasModule.run);
+const costRun = vi.mocked(costModule.run);
+const milestonesRun = vi.mocked(milestonesModule.run);
 
 const CLAUDE_MD = `## Project-Specific Config\n\n- **Language**: TypeScript\n- **Package manager**: pnpm\n- **Testing framework**: Vitest\n- **Quality check**: \`pnpm check\`\n- **Test command**: \`pnpm test\`\n`;
 const TODO_TASK = `# T-001: Test task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nA test task.\n`;
@@ -77,6 +97,10 @@ describe('LoopOrchestrator', () => {
     hasUnpushedCommits.mockResolvedValue(false);
     pushToRemote.mockResolvedValue(undefined);
     resolveGitTarget.mockResolvedValue({ remote: 'origin', branch: 'main' });
+    addAndCommit.mockResolvedValue('meta123');
+    shasRun.mockResolvedValue(undefined);
+    costRun.mockResolvedValue(undefined);
+    milestonesRun.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -476,6 +500,129 @@ describe('LoopOrchestrator', () => {
     const promptArg = calledArgs[1]; // ['-p', prompt, ...]
     expect(promptArg).toContain('System rules.');
     expect(calledArgs).not.toContain('--system-prompt');
+  });
+
+  it('runs post-iteration metadata updates after commit detected', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValueOnce('aaa1111').mockResolvedValueOnce('bbb2222');
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    expect(shasRun).toHaveBeenCalledWith([], tmpDir);
+    expect(costRun).toHaveBeenCalledWith(['--update-tasks'], tmpDir);
+    expect(milestonesRun).toHaveBeenCalledWith([], tmpDir);
+  });
+
+  it('does not run post-iteration metadata updates when no commit detected', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    // HEAD unchanged
+    getHeadSha.mockResolvedValue('same_sha');
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    expect(shasRun).not.toHaveBeenCalled();
+    expect(costRun).not.toHaveBeenCalled();
+    expect(milestonesRun).not.toHaveBeenCalled();
+  });
+
+  it('runs metadata updates before push', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValueOnce('aaa1111').mockResolvedValueOnce('bbb2222');
+    hasUnpushedCommits.mockResolvedValue(true);
+
+    const callOrder: string[] = [];
+    shasRun.mockImplementation(async () => {
+      callOrder.push('shas');
+    });
+    costRun.mockImplementation(async () => {
+      callOrder.push('cost');
+    });
+    milestonesRun.mockImplementation(async () => {
+      callOrder.push('milestones');
+    });
+    addAndCommit.mockImplementation(async () => {
+      callOrder.push('metadataCommit');
+      return 'meta1';
+    });
+    pushToRemote.mockImplementation(async () => {
+      callOrder.push('push');
+    });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ push: true }));
+    await orchestrator.execute();
+
+    const pushIdx = callOrder.indexOf('push');
+    const shasIdx = callOrder.indexOf('shas');
+    expect(shasIdx).toBeLessThan(pushIdx);
+    expect(callOrder.indexOf('metadataCommit')).toBeLessThan(pushIdx);
+  });
+
+  it('logs warning and continues when a metadata update fails', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValueOnce('aaa1111').mockResolvedValueOnce('bbb2222');
+
+    shasRun.mockRejectedValue(new Error('shas failed'));
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    // Should warn but not throw
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('shas'));
+    // Cost and milestones should still be called
+    expect(costRun).toHaveBeenCalled();
+    expect(milestonesRun).toHaveBeenCalled();
+  });
+
+  it('creates a metadata commit after post-iteration updates', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValueOnce('aaa1111').mockResolvedValueOnce('bbb2222');
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    expect(addAndCommit).toHaveBeenCalledWith(
+      tmpDir,
+      expect.arrayContaining(['docs/tasks', 'docs/MILESTONES.md']),
+      'Update task metadata',
+    );
+  });
+
+  it('skips metadata commit when addAndCommit fails (nothing to commit)', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValueOnce('aaa1111').mockResolvedValueOnce('bbb2222');
+    addAndCommit.mockRejectedValue(new Error('nothing to commit'));
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    // Should not throw
+    await orchestrator.execute();
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('metadata commit'));
   });
 
   it('injects retry context on timeout failure', async () => {
