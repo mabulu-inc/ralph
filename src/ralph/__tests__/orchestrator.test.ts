@@ -7,7 +7,12 @@ vi.mock('../core/process.js', () => ({
   spawnWithCapture: vi.fn(),
   monitorProcess: vi.fn(),
   killProcessTree: vi.fn(),
-  findProcessesByPattern: vi.fn(),
+}));
+
+vi.mock('../core/pid-file.js', () => ({
+  writePidFile: vi.fn(),
+  removePidFile: vi.fn(),
+  readPidFile: vi.fn(),
 }));
 
 vi.mock('../core/git.js', () => ({

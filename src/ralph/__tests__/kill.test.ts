@@ -1,15 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as processModule from '../core/process.js';
+import * as pidFileModule from '../core/pid-file.js';
 
 vi.mock('../core/process.js', () => ({
-  findProcessesByPattern: vi.fn(),
   killProcessTree: vi.fn(),
 }));
 
-const findProcessesByPattern = vi.mocked(processModule.findProcessesByPattern);
-const killProcessTree = vi.mocked(processModule.killProcessTree);
+vi.mock('../core/pid-file.js', () => ({
+  readPidFile: vi.fn(),
+  removePidFile: vi.fn(),
+}));
 
-// Dynamic import so the mock is in place
+const killProcessTree = vi.mocked(processModule.killProcessTree);
+const readPidFile = vi.mocked(pidFileModule.readPidFile);
+const removePidFile = vi.mocked(pidFileModule.removePidFile);
+
 async function loadKill() {
   const mod = await import('../commands/kill.js');
   return mod.run;
@@ -25,74 +30,51 @@ describe('ralph kill', () => {
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
-  it('reports "Ralph is not running" when no processes found', async () => {
-    findProcessesByPattern.mockResolvedValue([]);
+  it('reports "Ralph is not running" when no PID file exists', async () => {
+    readPidFile.mockResolvedValue(null);
     const run = await loadKill();
-    await run([]);
+    await run([], '/fake/project');
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('not running'));
   });
 
-  it('searches for ralph loop and claude patterns', async () => {
-    findProcessesByPattern.mockResolvedValue([]);
+  it('reads the PID file from .ralph-logs/ralph.pid', async () => {
+    readPidFile.mockResolvedValue(null);
     const run = await loadKill();
-    await run([]);
-    expect(findProcessesByPattern).toHaveBeenCalledWith('ralph loop');
-    expect(findProcessesByPattern).toHaveBeenCalledWith('claude');
+    await run([], '/fake/project');
+    expect(readPidFile).toHaveBeenCalledWith('/fake/project/.ralph-logs/ralph.pid');
   });
 
-  it('kills found processes and reports them', async () => {
-    findProcessesByPattern.mockResolvedValueOnce([1234]).mockResolvedValueOnce([5678, 9012]);
+  it('kills the process tree and removes the PID file', async () => {
+    readPidFile.mockResolvedValue(1234);
     killProcessTree.mockResolvedValue(undefined);
+    removePidFile.mockResolvedValue(undefined);
 
     const run = await loadKill();
-    await run([]);
+    await run([], '/fake/project');
 
     expect(killProcessTree).toHaveBeenCalledWith(1234);
-    expect(killProcessTree).toHaveBeenCalledWith(5678);
-    expect(killProcessTree).toHaveBeenCalledWith(9012);
-    expect(killProcessTree).toHaveBeenCalledTimes(3);
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Killed 3'));
+    expect(removePidFile).toHaveBeenCalledWith('/fake/project/.ralph-logs/ralph.pid');
+    expect(logSpy).toHaveBeenCalledWith('Killed 1 process');
   });
 
-  it('deduplicates PIDs found by multiple patterns', async () => {
-    findProcessesByPattern.mockResolvedValueOnce([1234]).mockResolvedValueOnce([1234, 5678]);
-    killProcessTree.mockResolvedValue(undefined);
-
-    const run = await loadKill();
-    await run([]);
-
-    expect(killProcessTree).toHaveBeenCalledTimes(2);
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Killed 2'));
-  });
-
-  it('reports errors for individual process kills without failing', async () => {
-    findProcessesByPattern.mockResolvedValueOnce([1234]).mockResolvedValueOnce([]);
+  it('reports errors when kill fails', async () => {
+    readPidFile.mockResolvedValue(1234);
     killProcessTree.mockRejectedValueOnce(new Error('EPERM'));
 
     const run = await loadKill();
-    await run([]);
+    await run([], '/fake/project');
 
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('1234'));
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Killed 0'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('EPERM'));
   });
 
   it('handles non-Error throws gracefully', async () => {
-    findProcessesByPattern.mockResolvedValueOnce([999]).mockResolvedValueOnce([]);
+    readPidFile.mockResolvedValue(999);
     killProcessTree.mockRejectedValueOnce('string error');
 
     const run = await loadKill();
-    await run([]);
+    await run([], '/fake/project');
 
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('string error'));
-  });
-
-  it('uses singular "process" when killing exactly one', async () => {
-    findProcessesByPattern.mockResolvedValueOnce([42]).mockResolvedValueOnce([]);
-    killProcessTree.mockResolvedValue(undefined);
-
-    const run = await loadKill();
-    await run([]);
-
-    expect(logSpy).toHaveBeenCalledWith('Killed 1 process');
   });
 });

@@ -121,30 +121,6 @@ async function waitForDeath(pid: number, timeoutMs: number): Promise<boolean> {
   return false;
 }
 
-export async function findProcessesByPattern(pattern: string): Promise<number[]> {
-  try {
-    const { stdout } = await execFileAsync('ps', ['ax', '-o', 'pid,command']);
-    const lines = stdout.split('\n');
-    const pids: number[] = [];
-
-    for (const line of lines) {
-      if (!line.includes(pattern)) continue;
-      const trimmed = line.trim();
-      const spaceIdx = trimmed.indexOf(' ');
-      if (spaceIdx === -1) continue;
-      const pid = parseInt(trimmed.slice(0, spaceIdx), 10);
-      if (isNaN(pid)) continue;
-      // Exclude own process and the ps command itself
-      if (pid === process.pid) continue;
-      pids.push(pid);
-    }
-
-    return pids;
-  } catch {
-    return [];
-  }
-}
-
 export async function monitorProcess(
   child: ChildProcess,
   options?: MonitorOptions,

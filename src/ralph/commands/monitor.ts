@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanTasks, countByStatus, type Task } from '../core/tasks.js';
-import { findProcessesByPattern } from '../core/process.js';
+import { readPidFile } from '../core/pid-file.js';
 
 const ALL_PHASES = ['Boot', 'Red', 'Green', 'Verify', 'Commit'] as const;
 
@@ -95,8 +95,9 @@ export async function renderDashboard(tasksDir: string, logsDir: string): Promis
   const counts = countByStatus(tasks);
   const total = counts.DONE + counts.TODO;
 
-  const ralphPids = await findProcessesByPattern('ralph loop');
-  const status = detectStatus(ralphPids);
+  const pidPath = join(tasksDir, '..', '..', '.ralph-logs', 'ralph.pid');
+  const ralphPid = await readPidFile(pidPath);
+  const status = detectStatus(ralphPid !== null ? [ralphPid] : []);
 
   let currentTaskId: string | null = null;
   let currentTaskTitle: string | null = null;

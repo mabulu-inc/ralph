@@ -6,7 +6,6 @@ import {
   spawnWithCapture,
   killProcessTree,
   getChildPids,
-  findProcessesByPattern,
   monitorProcess,
 } from '../core/process.js';
 
@@ -223,35 +222,6 @@ describe('process management', () => {
     it('returns empty array for a nonexistent PID', async () => {
       const childPids = await getChildPids(999999999);
       expect(childPids).toEqual([]);
-    });
-  });
-
-  describe('findProcessesByPattern', () => {
-    it('finds processes matching a command pattern', async () => {
-      // Spawn a process with a unique marker in its args
-      const marker = `ralph-test-marker-${Date.now()}`;
-      const child = spawnWithCapture(
-        'node',
-        ['-e', `// ${marker}\nsetInterval(() => {}, 1000)`],
-        {},
-      );
-      cleanupPids.push(child.pid!);
-
-      await new Promise((r) => setTimeout(r, 100));
-
-      const pids = await findProcessesByPattern(marker);
-      expect(pids).toContain(child.pid!);
-    });
-
-    it('returns empty array when no match', async () => {
-      const pids = await findProcessesByPattern('nonexistent-process-xyz-999999');
-      expect(pids).toEqual([]);
-    });
-
-    it('excludes the current process', async () => {
-      // The grep/ps command itself should not appear
-      const pids = await findProcessesByPattern('nonexistent-process-abc-888888');
-      expect(pids).not.toContain(process.pid);
     });
   });
 

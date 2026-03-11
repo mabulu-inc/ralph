@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { scanTasks, findNextTask, allDone, countByStatus } from '../../core/tasks.js';
 import { readConfig } from '../../core/config.js';
 import { spawnWithCapture, monitorProcess } from '../../core/process.js';
+import { writePidFile, removePidFile } from '../../core/pid-file.js';
 import { generateBootPrompt } from './prompt-generator.js';
 import { LoopGitService } from './git-service.js';
 import { scaleForComplexity, type LoopOptions } from './index.js';
@@ -23,7 +24,19 @@ export class LoopOrchestrator {
 
   async execute(): Promise<void> {
     const config = await readConfig(this.projectDir);
+    const pidPath = join(this.logsDir, 'ralph.pid');
 
+    await mkdir(this.logsDir, { recursive: true });
+    await writePidFile(pidPath, process.pid);
+
+    try {
+      await this.executeLoop(config);
+    } finally {
+      await removePidFile(pidPath);
+    }
+  }
+
+  private async executeLoop(config: Awaited<ReturnType<typeof readConfig>>): Promise<void> {
     for (
       let iteration = 1;
       this.opts.iterations === 0 || iteration <= this.opts.iterations;
@@ -68,8 +81,6 @@ export class LoopOrchestrator {
       const headBefore = headBeforeResult.sha;
 
       const prompt = generateBootPrompt(nextTask, config);
-
-      await mkdir(this.logsDir, { recursive: true });
 
       const now = new Date();
       const timestamp = [

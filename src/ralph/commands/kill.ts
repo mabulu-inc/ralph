@@ -1,32 +1,28 @@
-import { findProcessesByPattern, killProcessTree } from '../core/process.js';
+import { join } from 'node:path';
+import { killProcessTree } from '../core/process.js';
+import { readPidFile, removePidFile } from '../core/pid-file.js';
 
-const SEARCH_PATTERNS = ['ralph loop', 'claude'];
+export function getPidFilePath(projectDir: string): string {
+  return join(projectDir, '.ralph-logs', 'ralph.pid');
+}
 
-export async function run(_args: string[]): Promise<void> {
-  const allPids = new Set<number>();
+export async function run(_args: string[], cwd?: string): Promise<void> {
+  const projectDir = cwd ?? process.cwd();
+  const pidPath = getPidFilePath(projectDir);
 
-  for (const pattern of SEARCH_PATTERNS) {
-    const pids = await findProcessesByPattern(pattern);
-    for (const pid of pids) {
-      allPids.add(pid);
-    }
-  }
+  const pid = await readPidFile(pidPath);
 
-  if (allPids.size === 0) {
+  if (pid === null) {
     console.log('Ralph is not running');
     return;
   }
 
-  let killed = 0;
-  for (const pid of allPids) {
-    try {
-      await killProcessTree(pid);
-      killed++;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`Failed to kill process ${pid}: ${message}`);
-    }
+  try {
+    await killProcessTree(pid);
+    await removePidFile(pidPath);
+    console.log('Killed 1 process');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Failed to kill process ${pid}: ${message}`);
   }
-
-  console.log(`Killed ${killed} process${killed === 1 ? '' : 'es'}`);
 }
