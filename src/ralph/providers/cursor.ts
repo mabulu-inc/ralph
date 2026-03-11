@@ -4,6 +4,8 @@ export const cursorProvider: AgentProvider = {
   binary: 'cursor',
   outputFormat: ['--output-format', 'stream-json'],
   supportsMaxTurns: false,
+  supportsSystemPrompt: false,
+  systemPromptFlag: '',
   instructionsFile: '.cursor/rules/',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {

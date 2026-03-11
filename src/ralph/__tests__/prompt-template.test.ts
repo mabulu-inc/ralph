@@ -3,7 +3,11 @@ import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { interpolateTemplate, loadAndInterpolate } from '../core/prompt-template.js';
+import {
+  interpolateTemplate,
+  loadAndInterpolate,
+  loadLayeredPrompt,
+} from '../core/prompt-template.js';
 import type { Task } from '../core/tasks.js';
 import type { ProjectConfig } from '../core/config.js';
 
@@ -327,5 +331,78 @@ describe('loadAndInterpolate', () => {
 
     const result = await loadAndInterpolate(tmpDir, mockTask, mockConfig);
     expect(result).toContain('Retry: []');
+  });
+});
+
+describe('loadLayeredPrompt', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'ralph-layered-'));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('returns separate systemPrompt and userPrompt when system.md exists', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'system.md'), 'System rules here.');
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'Task {{task.id}}: {{task.title}}');
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.systemPrompt).toBe('System rules here.');
+    expect(result.userPrompt).toBe('Task T-005: Build feature X');
+  });
+
+  it('concatenates system + user into userPrompt when system.md is missing', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'Task {{task.id}}: {{task.title}}');
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.systemPrompt).toBeUndefined();
+    expect(result.userPrompt).toBe('Task T-005: Build feature X');
+  });
+
+  it('does not interpolate template variables in system.md', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'system.md'),
+      'No vars: {{task.id}} stays as-is.',
+    );
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'Task {{task.id}}');
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.systemPrompt).toBe('No vars: {{task.id}} stays as-is.');
+  });
+
+  it('interpolates boot.md with task and config variables', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'system.md'), 'System prompt.');
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Lang: {{config.language}}, Task: {{task.id}}',
+    );
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.userPrompt).toBe('Lang: TypeScript, Task: T-005');
+  });
+
+  it('passes retry context to user prompt interpolation', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'system.md'), 'System.');
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), 'Retry: {{retryContext}}');
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig, 'RETRY: failed');
+    expect(result.userPrompt).toContain('RETRY: failed');
+  });
+
+  it('throws when boot.md is missing', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'system.md'), 'System.');
+
+    await expect(loadLayeredPrompt(tmpDir, mockTask, mockConfig)).rejects.toThrow(
+      'docs/prompts/boot.md',
+    );
   });
 });

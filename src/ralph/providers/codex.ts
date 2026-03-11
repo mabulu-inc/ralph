@@ -4,6 +4,8 @@ export const codexProvider: AgentProvider = {
   binary: 'codex',
   outputFormat: ['--json'],
   supportsMaxTurns: false,
+  supportsSystemPrompt: false,
+  systemPromptFlag: '',
   instructionsFile: 'AGENTS.md',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {

@@ -4,6 +4,8 @@ export const continueProvider: AgentProvider = {
   binary: 'cn',
   outputFormat: ['--output-format', 'stream-json'],
   supportsMaxTurns: true,
+  supportsSystemPrompt: false,
+  systemPromptFlag: '',
   instructionsFile: '~/.continue/config.yaml',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {

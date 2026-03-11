@@ -85,6 +85,16 @@ describe('runInit', () => {
     expect(content).toContain('{{config.language}}');
   });
 
+  it('creates docs/prompts/system.md', async () => {
+    await runInit(tmpDir, defaultAnswers);
+    const filePath = path.join(tmpDir, 'docs', 'prompts', 'system.md');
+    expect(fs.existsSync(filePath)).toBe(true);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    // system.md should contain methodology rules but no template variables
+    expect(content).toContain('[PHASE]');
+    expect(content).not.toMatch(/\{\{.*?\}\}/);
+  });
+
   it('returns a summary of created files', async () => {
     const result = await runInit(tmpDir, defaultAnswers);
     expect(result.created).toContain('docs/PRD.md');
@@ -92,6 +102,7 @@ describe('runInit', () => {
     expect(result.created).toContain('docs/tasks/T-000.md');
     expect(result.created).toContain('.claude/CLAUDE.md');
     expect(result.created).toContain('docs/prompts/boot.md');
+    expect(result.created).toContain('docs/prompts/system.md');
     expect(result.created).toContain('docs/prompts/rules.md');
     expect(result.skipped).toHaveLength(0);
     expect(result.overwritten).toHaveLength(0);

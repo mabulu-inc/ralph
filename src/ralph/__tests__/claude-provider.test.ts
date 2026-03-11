@@ -88,4 +88,34 @@ describe('claudeProvider', () => {
   it('parseOutput returns raw output unchanged', () => {
     expect(claudeProvider.parseOutput('some output')).toBe('some output');
   });
+
+  it('supports system prompt', () => {
+    expect(claudeProvider.supportsSystemPrompt).toBe(true);
+  });
+
+  it('has --system-prompt flag', () => {
+    expect(claudeProvider.systemPromptFlag).toBe('--system-prompt');
+  });
+
+  it('builds args with system prompt when provided', () => {
+    const args = claudeProvider.buildArgs('user prompt', {
+      outputFormat: claudeProvider.outputFormat,
+      systemPrompt: 'system rules',
+    });
+
+    expect(args).toContain('--system-prompt');
+    const flagIdx = args.indexOf('--system-prompt');
+    expect(args[flagIdx + 1]).toBe('system rules');
+    expect(args).toContain('-p');
+    const pIdx = args.indexOf('-p');
+    expect(args[pIdx + 1]).toBe('user prompt');
+  });
+
+  it('omits system prompt flag when not provided', () => {
+    const args = claudeProvider.buildArgs('user prompt', {
+      outputFormat: claudeProvider.outputFormat,
+    });
+
+    expect(args).not.toContain('--system-prompt');
+  });
 });

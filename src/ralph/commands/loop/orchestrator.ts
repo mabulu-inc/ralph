@@ -6,7 +6,7 @@ import { getProvider, type AgentProvider } from '../../core/agent-provider.js';
 import { ensureProvidersRegistered } from '../../providers/index.js';
 import { spawnWithCapture, monitorProcess } from '../../core/process.js';
 import { writePidFile, removePidFile } from '../../core/pid-file.js';
-import { loadAndInterpolate } from '../../core/prompt-template.js';
+import { loadLayeredPrompt } from '../../core/prompt-template.js';
 import { buildRetryContext } from '../../core/retry-context.js';
 import { LoopGitService } from './git-service.js';
 import { scaleForComplexity, type LoopOptions } from './index.js';
@@ -93,7 +93,19 @@ export class LoopOrchestrator {
         retryContext = await buildRetryContext(this.logsDir, nextTask.id);
       }
 
-      const prompt = await loadAndInterpolate(this.projectDir, nextTask, config, retryContext);
+      const layered = await loadLayeredPrompt(this.projectDir, nextTask, config, retryContext);
+
+      let prompt: string;
+      let systemPromptForArgs: string | undefined;
+
+      if (this.provider.supportsSystemPrompt && layered.systemPrompt) {
+        prompt = layered.userPrompt;
+        systemPromptForArgs = layered.systemPrompt;
+      } else if (layered.systemPrompt) {
+        prompt = layered.systemPrompt + '\n\n' + layered.userPrompt;
+      } else {
+        prompt = layered.userPrompt;
+      }
 
       const now = new Date();
       const timestamp = [
@@ -111,12 +123,17 @@ export class LoopOrchestrator {
         outputFormat: string[];
         maxTurns?: number;
         model?: string;
+        systemPrompt?: string;
       } = {
         outputFormat: this.provider.outputFormat,
       };
 
       if (this.provider.supportsMaxTurns) {
         buildArgsOptions.maxTurns = effectiveMaxTurns;
+      }
+
+      if (systemPromptForArgs) {
+        buildArgsOptions.systemPrompt = systemPromptForArgs;
       }
 
       const agentArgs = this.provider.buildArgs(prompt, buildArgsOptions);

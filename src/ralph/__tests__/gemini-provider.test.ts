@@ -57,4 +57,12 @@ describe('geminiProvider', () => {
   it('parseOutput returns raw output unchanged', () => {
     expect(geminiProvider.parseOutput('some output')).toBe('some output');
   });
+
+  it('does not support system prompt', () => {
+    expect(geminiProvider.supportsSystemPrompt).toBe(false);
+  });
+
+  it('has empty system prompt flag', () => {
+    expect(geminiProvider.systemPromptFlag).toBe('');
+  });
 });

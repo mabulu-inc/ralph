@@ -2,12 +2,15 @@ export interface BuildArgsOptions {
   outputFormat: string[];
   maxTurns?: number;
   model?: string;
+  systemPrompt?: string;
 }
 
 export interface AgentProvider {
   readonly binary: string;
   readonly outputFormat: string[];
   readonly supportsMaxTurns: boolean;
+  readonly supportsSystemPrompt: boolean;
+  readonly systemPromptFlag: string;
   readonly instructionsFile: string;
   buildArgs(prompt: string, options: BuildArgsOptions): string[];
   parseOutput(raw: string): string;

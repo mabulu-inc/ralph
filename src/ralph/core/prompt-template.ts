@@ -87,3 +87,31 @@ export async function loadAndInterpolate(
     retryContext,
   );
 }
+
+export interface LayeredPrompt {
+  systemPrompt?: string;
+  userPrompt: string;
+}
+
+export async function loadLayeredPrompt(
+  projectDir: string,
+  task: Task,
+  config: ProjectConfig,
+  retryContext = '',
+): Promise<LayeredPrompt> {
+  const systemPath = join(projectDir, 'docs', 'prompts', 'system.md');
+  let systemPrompt: string | undefined;
+  try {
+    systemPrompt = await readFile(systemPath, 'utf-8');
+  } catch {
+    // system.md doesn't exist — fallback to single-prompt mode
+  }
+
+  const userPrompt = await loadAndInterpolate(projectDir, task, config, retryContext);
+
+  if (systemPrompt) {
+    return { systemPrompt, userPrompt };
+  }
+
+  return { userPrompt };
+}

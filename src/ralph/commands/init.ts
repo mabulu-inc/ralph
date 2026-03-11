@@ -11,6 +11,7 @@ import { generateMethodology } from '../templates/methodology.js';
 import { generatePrd } from '../templates/prd.js';
 import { generateTask000 } from '../templates/task-000.js';
 import { defaultBootPromptTemplate } from '../templates/boot-prompt.js';
+import { defaultSystemPromptTemplate } from '../templates/system-prompt.js';
 import { generateRules } from '../templates/rules-md.js';
 import { generateRalphConfigJson } from '../templates/ralph-config-json.js';
 
@@ -210,6 +211,13 @@ export async function runInit(
     await writeFile(rootDir, '.claude/CLAUDE.md', generateClaudeMd(config), onConflict, result);
   }
   await writeFile(rootDir, 'docs/prompts/boot.md', defaultBootPromptTemplate(), onConflict, result);
+  await writeFile(
+    rootDir,
+    'docs/prompts/system.md',
+    defaultSystemPromptTemplate(),
+    onConflict,
+    result,
+  );
   await writeFile(rootDir, 'docs/prompts/rules.md', generateRules(config), onConflict, result);
 
   await writeFile(

@@ -80,4 +80,12 @@ describe('continueProvider', () => {
   it('parseOutput returns raw output unchanged', () => {
     expect(continueProvider.parseOutput('some output')).toBe('some output');
   });
+
+  it('does not support system prompt', () => {
+    expect(continueProvider.supportsSystemPrompt).toBe(false);
+  });
+
+  it('has empty system prompt flag', () => {
+    expect(continueProvider.systemPromptFlag).toBe('');
+  });
 });

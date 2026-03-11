@@ -4,6 +4,8 @@ export const claudeProvider: AgentProvider = {
   binary: 'claude',
   outputFormat: ['--output-format', 'stream-json'],
   supportsMaxTurns: true,
+  supportsSystemPrompt: true,
+  systemPromptFlag: '--system-prompt',
   instructionsFile: '.claude/CLAUDE.md',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {
@@ -20,6 +22,10 @@ export const claudeProvider: AgentProvider = {
 
     if (options.model) {
       args.push('--model', options.model);
+    }
+
+    if (options.systemPrompt) {
+      args.push('--system-prompt', options.systemPrompt);
     }
 
     args.push('-p', prompt);

@@ -4,6 +4,8 @@ export const geminiProvider: AgentProvider = {
   binary: 'gemini',
   outputFormat: ['--output-format', 'stream-json'],
   supportsMaxTurns: false,
+  supportsSystemPrompt: false,
+  systemPromptFlag: '',
   instructionsFile: 'GEMINI.md',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {

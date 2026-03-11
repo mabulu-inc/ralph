@@ -314,6 +314,8 @@ describe('LoopOrchestrator', () => {
       binary: 'gemini',
       outputFormat: ['--output-format', 'stream-json'],
       supportsMaxTurns: false,
+      supportsSystemPrompt: false,
+      systemPromptFlag: '',
       instructionsFile: 'GEMINI.md',
       buildArgs: (prompt, options) => ['-p', prompt, ...options.outputFormat],
       parseOutput: (raw) => raw,
@@ -341,6 +343,8 @@ describe('LoopOrchestrator', () => {
       binary: 'codex',
       outputFormat: ['--json'],
       supportsMaxTurns: false,
+      supportsSystemPrompt: false,
+      systemPromptFlag: '',
       instructionsFile: 'AGENTS.md',
       buildArgs: (prompt, options) => {
         const args = ['exec', ...options.outputFormat];
@@ -422,6 +426,56 @@ describe('LoopOrchestrator', () => {
     const calledArgs = spawnWithCapture.mock.calls[0][1] as string[];
     const allArgs = calledArgs.join(' ');
     expect(allArgs).not.toContain('RETRY CONTEXT');
+  });
+
+  it('passes system prompt separately when system.md exists and provider supports it', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'system.md'),
+      'You are a methodology-following agent.',
+    );
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const calledArgs = spawnWithCapture.mock.calls[0][1] as string[];
+    expect(calledArgs).toContain('--system-prompt');
+    const flagIdx = calledArgs.indexOf('--system-prompt');
+    expect(calledArgs[flagIdx + 1]).toBe('You are a methodology-following agent.');
+  });
+
+  it('concatenates system + user prompt when provider does not support system prompt', async () => {
+    await setupProject();
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'system.md'), 'System rules.');
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const noSysProvider: AgentProvider = {
+      binary: 'gemini',
+      outputFormat: ['--output-format', 'stream-json'],
+      supportsMaxTurns: false,
+      supportsSystemPrompt: false,
+      systemPromptFlag: '',
+      instructionsFile: 'GEMINI.md',
+      buildArgs: (prompt, options) => ['-p', prompt, ...options.outputFormat],
+      parseOutput: (raw) => raw,
+    };
+
+    resetRegistry();
+    registerProvider('gemini', noSysProvider);
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ agent: 'gemini' }));
+    await orchestrator.execute();
+
+    const calledArgs = spawnWithCapture.mock.calls[0][1] as string[];
+    // System content should be concatenated into the prompt (second arg after -p)
+    const promptArg = calledArgs[1]; // ['-p', prompt, ...]
+    expect(promptArg).toContain('System rules.');
+    expect(calledArgs).not.toContain('--system-prompt');
   });
 
   it('injects retry context on timeout failure', async () => {

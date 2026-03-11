@@ -58,4 +58,12 @@ describe('codexProvider', () => {
   it('parseOutput returns raw output unchanged', () => {
     expect(codexProvider.parseOutput('some output')).toBe('some output');
   });
+
+  it('does not support system prompt', () => {
+    expect(codexProvider.supportsSystemPrompt).toBe(false);
+  });
+
+  it('has empty system prompt flag', () => {
+    expect(codexProvider.systemPromptFlag).toBe('');
+  });
 });

@@ -57,4 +57,12 @@ describe('cursorProvider', () => {
   it('parseOutput returns raw output unchanged', () => {
     expect(cursorProvider.parseOutput('some output')).toBe('some output');
   });
+
+  it('does not support system prompt', () => {
+    expect(cursorProvider.supportsSystemPrompt).toBe(false);
+  });
+
+  it('has empty system prompt flag', () => {
+    expect(cursorProvider.systemPromptFlag).toBe('');
+  });
 });
