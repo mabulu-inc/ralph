@@ -167,7 +167,7 @@ export function extractTaskIdFromLog(filename: string): string | null {
   return match ? match[1] : null;
 }
 
-export async function readLogTail(filePath: string, maxBytes = 8192): Promise<string> {
+export async function readLogTail(filePath: string, maxBytes = 32768): Promise<string> {
   try {
     const stats = await stat(filePath);
     const fileSize = stats.size;
@@ -269,15 +269,30 @@ function stripMarkdown(text: string): string {
 }
 
 export function parseLastLogLine(content: string, maxWidth = 0): string | null {
+  const result = parseLastLogLineWithTimestamp(content, maxWidth);
+  return result ? result.text : null;
+}
+
+export interface LastLogLineResult {
+  text: string;
+  timestamp: Date | null;
+}
+
+export function parseLastLogLineWithTimestamp(
+  content: string,
+  maxWidth = 0,
+): LastLogLineResult | null {
   if (!content) return null;
   const lines = content.split('\n');
   let lastText: string | null = null;
+  let lastTimestamp: Date | null = null;
 
   for (const line of lines) {
     if (!line.trim()) continue;
     const text = extractTextFromJsonLine(line);
     if (text && text.trim()) {
       lastText = text.trim();
+      lastTimestamp = extractTimestampFromJsonLine(line);
     }
   }
 
@@ -291,10 +306,77 @@ export function parseLastLogLine(content: string, maxWidth = 0): string | null {
   }
 
   if (maxWidth > 0 && lastText.length > maxWidth) {
-    return lastText.slice(0, maxWidth - 1) + '…';
+    lastText = lastText.slice(0, maxWidth - 1) + '…';
   }
 
-  return lastText;
+  return { text: lastText, timestamp: lastTimestamp };
+}
+
+export interface ToolUseInfo {
+  tool: string;
+  detail: string | null;
+  timestamp: Date | null;
+}
+
+function extractToolUseFromJsonLine(line: string): ToolUseInfo | null {
+  try {
+    const obj = JSON.parse(line);
+    const timestamp = extractTimestampFromJsonLine(line);
+
+    // Top-level tool_use
+    if (obj.type === 'tool_use' && typeof obj.name === 'string') {
+      return { tool: obj.name, detail: extractToolDetail(obj.input), timestamp };
+    }
+
+    // Nested in content array
+    const content = obj.message?.content ?? obj.content;
+    if (Array.isArray(content)) {
+      let lastToolUse: ToolUseInfo | null = null;
+      for (const block of content) {
+        if (block.type === 'tool_use' && typeof block.name === 'string') {
+          lastToolUse = { tool: block.name, detail: extractToolDetail(block.input), timestamp };
+        }
+      }
+      return lastToolUse;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function extractToolDetail(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+  const inp = input as Record<string, unknown>;
+
+  const raw =
+    typeof inp.file_path === 'string'
+      ? inp.file_path
+      : typeof inp.command === 'string'
+        ? inp.command
+        : typeof inp.pattern === 'string'
+          ? inp.pattern
+          : null;
+
+  if (!raw) return null;
+  return raw.length > 79 ? raw.slice(0, 79) + '…' : raw;
+}
+
+export function extractLastToolUse(content: string): ToolUseInfo | null {
+  if (!content) return null;
+  const lines = content.split('\n');
+  let last: ToolUseInfo | null = null;
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const info = extractToolUseFromJsonLine(line);
+    if (info) {
+      last = info;
+    }
+  }
+
+  return last;
 }
 
 export function formatElapsed(ms: number): string {
@@ -320,6 +402,8 @@ export interface MonitorData {
   currentTaskTitle: string | null;
   phaseTimestamps: PhaseTimestamp[];
   lastLogLine: string | null;
+  lastOutputTimestamp: Date | null;
+  lastActivity: ToolUseInfo | null;
 }
 
 export function formatMonitorOutput(data: MonitorData): string {
@@ -337,7 +421,24 @@ export function formatMonitorOutput(data: MonitorData): string {
   }
 
   if (data.lastLogLine) {
-    lines.push(`Last output: ${data.lastLogLine}`);
+    if (data.lastOutputTimestamp) {
+      const staleness = Date.now() - data.lastOutputTimestamp.getTime();
+      lines.push(`Last output (${formatElapsed(staleness)}): ${data.lastLogLine}`);
+    } else {
+      lines.push(`Last output: ${data.lastLogLine}`);
+    }
+  }
+
+  if (data.lastActivity) {
+    let activityLine = `Activity: ${data.lastActivity.tool}`;
+    if (data.lastActivity.detail) {
+      activityLine += ` — ${data.lastActivity.detail}`;
+    }
+    if (data.lastActivity.timestamp) {
+      const elapsed = Date.now() - data.lastActivity.timestamp.getTime();
+      activityLine += ` (${formatElapsed(elapsed)})`;
+    }
+    lines.push(activityLine);
   }
 
   return lines.join('\n');
@@ -370,6 +471,8 @@ export async function collectMonitorData(
   let currentTaskTitle: string | null = null;
   let phaseTimestamps: PhaseTimestamp[] = [];
   let lastLogLine: string | null = null;
+  let lastOutputTimestamp: Date | null = null;
+  let lastActivity: ToolUseInfo | null = null;
 
   const latestLog = await findLatestLogFile(logsDir);
   if (latestLog) {
@@ -387,7 +490,12 @@ export async function collectMonitorData(
     const logContent = await readLogTail(logPath);
     if (logContent) {
       const termWidth = process.stdout.columns || 80;
-      lastLogLine = parseLastLogLine(logContent, termWidth);
+      const lastLogResult = parseLastLogLineWithTimestamp(logContent, termWidth);
+      if (lastLogResult) {
+        lastLogLine = lastLogResult.text;
+        lastOutputTimestamp = lastLogResult.timestamp;
+      }
+      lastActivity = extractLastToolUse(logContent);
     }
   }
 
@@ -399,6 +507,8 @@ export async function collectMonitorData(
     currentTaskTitle,
     phaseTimestamps,
     lastLogLine,
+    lastOutputTimestamp,
+    lastActivity,
   };
 }
 

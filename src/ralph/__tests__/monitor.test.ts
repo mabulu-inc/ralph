@@ -17,6 +17,8 @@ import {
   run,
   parseCurrentPhase,
   parseLastLogLine,
+  parseLastLogLineWithTimestamp,
+  extractLastToolUse,
   readLogTail,
   scanLogForPhases,
   formatElapsed,
@@ -422,6 +424,20 @@ describe('readLogTail', () => {
     const result = await readLogTail(join(dir, 'nope.jsonl'));
     expect(result).toBe('');
   });
+
+  it('uses 32KB default tail window', async () => {
+    const logPath = join(dir, 'large.jsonl');
+    // Create a file larger than 32KB
+    const line = `{"type":"text","text":"${'x'.repeat(100)}"}\n`;
+    const lineCount = Math.ceil(40_000 / line.length);
+    const content = line.repeat(lineCount);
+    await writeFile(logPath, content);
+    // Default should read 32KB, not 8KB
+    const tail = await readLogTail(logPath);
+    // The tail should be roughly 32KB (minus the first partial line)
+    expect(tail.length).toBeGreaterThan(8192);
+    expect(tail.length).toBeLessThanOrEqual(32768 + 200);
+  });
 });
 
 describe('formatElapsed', () => {
@@ -442,6 +458,121 @@ describe('formatElapsed', () => {
   });
 });
 
+describe('parseLastLogLineWithTimestamp', () => {
+  it('returns text and timestamp from the last text entry', () => {
+    const content = [
+      '{"type":"text","text":"first line","timestamp":"2026-03-10T12:00:00Z"}',
+      '{"type":"text","text":"second line","timestamp":"2026-03-10T12:01:00Z"}',
+    ].join('\n');
+    const result = parseLastLogLineWithTimestamp(content);
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe('second line');
+    expect(result!.timestamp).toEqual(new Date('2026-03-10T12:01:00Z'));
+  });
+
+  it('returns null when no text entries found', () => {
+    const content = '{"type":"tool_use","name":"read"}\n';
+    expect(parseLastLogLineWithTimestamp(content)).toBeNull();
+  });
+
+  it('returns null for empty content', () => {
+    expect(parseLastLogLineWithTimestamp('')).toBeNull();
+  });
+
+  it('returns text with null timestamp when timestamp missing', () => {
+    const content = '{"type":"text","text":"hello world"}\n';
+    const result = parseLastLogLineWithTimestamp(content);
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe('hello world');
+    expect(result!.timestamp).toBeNull();
+  });
+
+  it('strips markdown and takes last line of multiline text', () => {
+    const content =
+      '{"type":"text","text":"**bold** heading\\nactual last line","timestamp":"2026-03-10T12:00:00Z"}\n';
+    const result = parseLastLogLineWithTimestamp(content);
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe('actual last line');
+  });
+
+  it('truncates long text to specified maxWidth', () => {
+    const longText = 'a'.repeat(200);
+    const content = `{"type":"text","text":"${longText}","timestamp":"2026-03-10T12:00:00Z"}\n`;
+    const result = parseLastLogLineWithTimestamp(content, 80);
+    expect(result).not.toBeNull();
+    expect(result!.text.length).toBeLessThanOrEqual(80);
+    expect(result!.text.endsWith('…')).toBe(true);
+  });
+});
+
+describe('extractLastToolUse', () => {
+  it('extracts tool name from tool_use content block', () => {
+    const content = [
+      '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"src/foo.ts"}}]},"timestamp":"2026-03-10T12:00:00Z"}',
+    ].join('\n');
+    const result = extractLastToolUse(content);
+    expect(result).not.toBeNull();
+    expect(result!.tool).toBe('Read');
+    expect(result!.detail).toBe('src/foo.ts');
+    expect(result!.timestamp).toEqual(new Date('2026-03-10T12:00:00Z'));
+  });
+
+  it('extracts tool name from top-level tool_use type', () => {
+    const content =
+      '{"type":"tool_use","name":"Bash","input":{"command":"pnpm test"},"timestamp":"2026-03-10T12:01:00Z"}\n';
+    const result = extractLastToolUse(content);
+    expect(result).not.toBeNull();
+    expect(result!.tool).toBe('Bash');
+    expect(result!.detail).toBe('pnpm test');
+  });
+
+  it('returns the last tool_use when multiple exist', () => {
+    const content = [
+      '{"type":"tool_use","name":"Read","input":{"file_path":"a.ts"},"timestamp":"2026-03-10T12:00:00Z"}',
+      '{"type":"tool_use","name":"Edit","input":{"file_path":"b.ts"},"timestamp":"2026-03-10T12:01:00Z"}',
+    ].join('\n');
+    const result = extractLastToolUse(content);
+    expect(result).not.toBeNull();
+    expect(result!.tool).toBe('Edit');
+    expect(result!.detail).toBe('b.ts');
+  });
+
+  it('returns null when no tool_use entries found', () => {
+    const content = '{"type":"text","text":"hello"}\n';
+    expect(extractLastToolUse(content)).toBeNull();
+  });
+
+  it('returns null for empty content', () => {
+    expect(extractLastToolUse('')).toBeNull();
+  });
+
+  it('truncates long command details', () => {
+    const longCmd = 'x'.repeat(200);
+    const content = `{"type":"tool_use","name":"Bash","input":{"command":"${longCmd}"},"timestamp":"2026-03-10T12:00:00Z"}\n`;
+    const result = extractLastToolUse(content);
+    expect(result).not.toBeNull();
+    expect(result!.detail!.length).toBeLessThanOrEqual(80);
+    expect(result!.detail!.endsWith('…')).toBe(true);
+  });
+
+  it('extracts tool_use from nested content array', () => {
+    const content =
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"doing stuff"},{"type":"tool_use","name":"Grep","input":{"pattern":"foo"}}]},"timestamp":"2026-03-10T12:00:00Z"}\n';
+    const result = extractLastToolUse(content);
+    expect(result).not.toBeNull();
+    expect(result!.tool).toBe('Grep');
+  });
+
+  it('returns null detail when no relevant input fields', () => {
+    const content =
+      '{"type":"tool_use","name":"SomeTool","input":{"random":"value"},"timestamp":"2026-03-10T12:00:00Z"}\n';
+    const result = extractLastToolUse(content);
+    expect(result).not.toBeNull();
+    expect(result!.tool).toBe('SomeTool');
+    expect(result!.detail).toBeNull();
+  });
+});
+
 describe('formatMonitorOutput', () => {
   it('formats complete monitor display', () => {
     const output = formatMonitorOutput({
@@ -455,6 +586,8 @@ describe('formatMonitorOutput', () => {
         { phase: 'Red', startedAt: null },
       ],
       lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
     });
     expect(output).toContain('RUNNING');
     expect(output).toContain('5/10');
@@ -472,6 +605,8 @@ describe('formatMonitorOutput', () => {
       currentTaskTitle: null,
       phaseTimestamps: [],
       lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
     });
     expect(output).toContain('STOPPED');
     expect(output).toContain('10/10');
@@ -488,6 +623,8 @@ describe('formatMonitorOutput', () => {
       currentTaskTitle: 'Some task',
       phaseTimestamps: [],
       lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
     });
     // Should show all phases as empty when RUNNING
     expect(output).toContain('Phases:');
@@ -507,11 +644,14 @@ describe('formatMonitorOutput', () => {
         { phase: 'Red', startedAt: new Date(Date.now() - 30_000) },
       ],
       lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
     });
     expect(output).not.toContain('Current phase:');
   });
 
-  it('shows last log line', () => {
+  it('shows last log line with staleness when timestamp present', () => {
+    const twoMinutesAgo = new Date(Date.now() - 133_000);
     const output = formatMonitorOutput({
       status: 'RUNNING',
       done: 3,
@@ -520,6 +660,23 @@ describe('formatMonitorOutput', () => {
       currentTaskTitle: 'Some task',
       phaseTimestamps: [{ phase: 'Boot', startedAt: null }],
       lastLogLine: 'Writing test file...',
+      lastOutputTimestamp: twoMinutesAgo,
+      lastActivity: null,
+    });
+    expect(output).toMatch(/Last output \(2m \d+s ago\): Writing test file\.\.\./);
+  });
+
+  it('shows last log line without staleness when no timestamp', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [{ phase: 'Boot', startedAt: null }],
+      lastLogLine: 'Writing test file...',
+      lastOutputTimestamp: null,
+      lastActivity: null,
     });
     expect(output).toContain('Last output: Writing test file...');
   });
@@ -533,8 +690,58 @@ describe('formatMonitorOutput', () => {
       currentTaskTitle: 'Some task',
       phaseTimestamps: [{ phase: 'Boot', startedAt: null }],
       lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
     });
     expect(output).not.toContain('Last output');
+  });
+
+  it('shows activity line when lastActivity is present', () => {
+    const fourteenSecondsAgo = new Date(Date.now() - 14_000);
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [{ phase: 'Boot', startedAt: null }],
+      lastLogLine: 'Some old text',
+      lastOutputTimestamp: new Date(Date.now() - 120_000),
+      lastActivity: { tool: 'Bash', detail: 'pnpm test', timestamp: fourteenSecondsAgo },
+    });
+    expect(output).toMatch(/Activity: Bash — pnpm test \(\d+s ago\)/);
+  });
+
+  it('shows activity without detail when detail is null', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [{ phase: 'Boot', startedAt: null }],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: { tool: 'Read', detail: null, timestamp: new Date(Date.now() - 5_000) },
+    });
+    expect(output).toMatch(/Activity: Read \(\d+s ago\)/);
+    expect(output).not.toContain('—');
+  });
+
+  it('shows activity without timestamp when timestamp is null', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [{ phase: 'Boot', startedAt: null }],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: { tool: 'Grep', detail: null, timestamp: null },
+    });
+    expect(output).toContain('Activity: Grep');
+    expect(output).not.toContain('ago');
   });
 });
 
