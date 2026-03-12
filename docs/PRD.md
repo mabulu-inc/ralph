@@ -194,12 +194,14 @@ Real-time status display showing progress and current activity.
 - Current task ID and title
 - Phase timeline with per-phase durations — completed phases show elapsed time and the active phase shows a live timer that updates each refresh, both using the same format (e.g., `● Boot (45s) → ● Red (1m 12s) → ● Green (2m 30s) → ○ Verify → ○ Commit`)
 - Phases should always display when RUNNING (even if no phase markers found yet — show all as `○`)
-- Last log line — the most recent text content from the agent, truncated to fit the terminal width, so the user can follow along in real time
+- Last output with staleness — the most recent text content from the agent, truncated to terminal width, with a staleness indicator showing how long ago it was emitted (e.g., `Last output (2m 13s ago): Let me verify the tests fail.`). The last output line must never disappear — if no text is found in the recent log tail, retain the last known text and update the staleness timer so the user can gauge whether the agent is stuck.
+- Activity indicator — when the most recent log entries are tool calls (no text), show what the agent is currently doing as a fallback (e.g., `Activity: Bash (14s ago)` or `Activity: Edit src/ralph/core/process.ts`). This fills the visual gap during tool-heavy stretches where no text output exists.
 
 **Behavior:**
 
 - Watch mode renders as a live dashboard — clear the screen before each refresh so the display updates in place rather than streaming appended output
 - Default refresh interval is 1 second for a responsive live timer
+- Log tail reading for last-output parsing should use a larger window (32KB) or a two-pass approach to avoid missing the last text entry during long tool-call sequences where 8KB of tool results can push text content out of the tail window
 
 **Options:**
 
