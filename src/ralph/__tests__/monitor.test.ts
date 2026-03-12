@@ -54,10 +54,10 @@ describe('parsePhases', () => {
 describe('parseAllPhases', () => {
   it('extracts all phases with timestamps from JSONL content', () => {
     const content = [
-      '{"type":"text","text":"[PHASE] Entering: Boot","timestamp":"2026-03-10T12:00:00Z"}',
-      '{"type":"text","text":"doing boot things"}',
-      '{"type":"text","text":"[PHASE] Entering: Red","timestamp":"2026-03-10T12:00:45Z"}',
-      '{"type":"text","text":"[PHASE] Entering: Green","timestamp":"2026-03-10T12:02:00Z"}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Boot"}]},"timestamp":"2026-03-10T12:00:00Z"}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"doing boot things"}]}}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Red"}]},"timestamp":"2026-03-10T12:00:45Z"}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Green"}]},"timestamp":"2026-03-10T12:02:00Z"}',
     ].join('\n');
     const result = parseAllPhases(content);
     expect(result).toHaveLength(3);
@@ -71,7 +71,8 @@ describe('parseAllPhases', () => {
   });
 
   it('handles phases without timestamps', () => {
-    const content = '{"type":"text","text":"[PHASE] Entering: Boot"}\n';
+    const content =
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Boot"}]}}\n';
     const result = parseAllPhases(content);
     expect(result).toHaveLength(1);
     expect(result[0].phase).toBe('Boot');
@@ -79,7 +80,8 @@ describe('parseAllPhases', () => {
   });
 
   it('handles plain text lines with phase markers', () => {
-    const content = '[PHASE] Entering: Verify\n[PHASE] Entering: Commit\n';
+    const content =
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Verify"}]}}\n{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Commit"}]}}\n';
     const result = parseAllPhases(content);
     expect(result).toHaveLength(2);
     expect(result[0].phase).toBe('Verify');
@@ -126,11 +128,17 @@ describe('scanLogForPhases', () => {
 
   it('reads full log file to find all phase markers', async () => {
     const lines = [
-      '{"type":"text","text":"[PHASE] Entering: Boot","timestamp":"2026-03-10T12:00:00Z"}',
-      ...Array.from({ length: 500 }, (_, i) => `{"type":"text","text":"line ${i}"}`),
-      '{"type":"text","text":"[PHASE] Entering: Red","timestamp":"2026-03-10T12:01:00Z"}',
-      ...Array.from({ length: 500 }, (_, i) => `{"type":"text","text":"more ${i}"}`),
-      '{"type":"text","text":"[PHASE] Entering: Green","timestamp":"2026-03-10T12:02:00Z"}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Boot"}]},"timestamp":"2026-03-10T12:00:00Z"}',
+      ...Array.from(
+        { length: 500 },
+        (_, i) => `{"type":"assistant","message":{"content":[{"type":"text","text":"line ${i}"}]}}`,
+      ),
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Red"}]},"timestamp":"2026-03-10T12:01:00Z"}',
+      ...Array.from(
+        { length: 500 },
+        (_, i) => `{"type":"assistant","message":{"content":[{"type":"text","text":"more ${i}"}]}}`,
+      ),
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Green"}]},"timestamp":"2026-03-10T12:02:00Z"}',
     ];
     const logPath = join(dir, 'test.jsonl');
     await writeFile(logPath, lines.join('\n'));
@@ -796,8 +804,8 @@ describe('ralph monitor (run)', () => {
     );
 
     const logContent = [
-      '{"type":"text","text":"[PHASE] Entering: Boot"}',
-      '{"type":"text","text":"[PHASE] Entering: Red"}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Boot"}]}}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"[PHASE] Entering: Red"}]}}',
     ].join('\n');
     await writeFile(join(logsDir, 'T-002-20260310-120000.jsonl'), logContent);
 

@@ -71,6 +71,12 @@ export function parseAllPhases(content: string): PhaseTimestamp[] {
 
   for (const line of lines) {
     if (!line.trim()) continue;
+    try {
+      const obj = JSON.parse(line);
+      if (obj.type !== 'assistant') continue;
+    } catch {
+      continue;
+    }
     const text = extractTextFromJsonLine(line);
     if (text) {
       const match = text.match(PHASE_INLINE_RE);
@@ -79,11 +85,6 @@ export function parseAllPhases(content: string): PhaseTimestamp[] {
           phase: match[1],
           startedAt: extractTimestampFromJsonLine(line),
         });
-      }
-    } else {
-      const match = line.match(PHASE_INLINE_RE);
-      if (match) {
-        results.push({ phase: match[1], startedAt: null });
       }
     }
   }
@@ -208,6 +209,12 @@ export async function scanLogForPhases(filePath: string): Promise<PhaseTimestamp
 
     rl.on('line', (line) => {
       if (!line.includes('[PHASE]')) return;
+      try {
+        const obj = JSON.parse(line);
+        if (obj.type !== 'assistant') return;
+      } catch {
+        return;
+      }
       const text = extractTextFromJsonLine(line);
       if (text) {
         const match = text.match(PHASE_INLINE_RE);
@@ -216,11 +223,6 @@ export async function scanLogForPhases(filePath: string): Promise<PhaseTimestamp
             phase: match[1],
             startedAt: extractTimestampFromJsonLine(line),
           });
-        }
-      } else {
-        const match = line.match(PHASE_INLINE_RE);
-        if (match) {
-          results.push({ phase: match[1], startedAt: null });
         }
       }
     });
