@@ -1,9 +1,40 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createWriteStream } from 'node:fs';
+import { createWriteStream, type WriteStream } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+
+function injectTimestamp(line: string): string {
+  try {
+    const obj = JSON.parse(line);
+    if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
+      obj.timestamp = new Date().toISOString();
+      return JSON.stringify(obj);
+    }
+  } catch {
+    // Not valid JSON — return as-is
+  }
+  return line;
+}
+
+function pipeStdoutWithTimestamps(child: ChildProcess, stream: WriteStream): void {
+  let buffer = '';
+  child.stdout?.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString();
+    let newlineIdx: number;
+    while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newlineIdx);
+      buffer = buffer.slice(newlineIdx + 1);
+      stream.write(injectTimestamp(line) + '\n');
+    }
+  });
+  child.stdout?.on('end', () => {
+    if (buffer.length > 0) {
+      stream.write(injectTimestamp(buffer) + '\n');
+    }
+  });
+}
 
 export interface SpawnOptions {
   logFile?: string;
@@ -36,7 +67,7 @@ export function spawnWithCapture(
 
   if (options.logFile) {
     const stream = createWriteStream(options.logFile, { flags: 'a' });
-    child.stdout?.pipe(stream);
+    pipeStdoutWithTimestamps(child, stream);
     child.stderr?.pipe(stream);
     child.on('close', () => stream.end());
   }

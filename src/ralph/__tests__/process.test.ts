@@ -264,4 +264,160 @@ describe('process management', () => {
       expect(chunks.join('')).toContain('callback-test');
     });
   });
+
+  describe('timestamp injection', () => {
+    it('injects a timestamp field into JSONL stdout lines', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'ralph-proc-'));
+      cleanupDirs.push(dir);
+      const logFile = join(dir, 'output.log');
+
+      const jsonLine = JSON.stringify({ type: 'assistant', text: 'hello' });
+      const child = spawnWithCapture(
+        'node',
+        ['-e', `process.stdout.write(${JSON.stringify(jsonLine + '\n')})`],
+        {
+          logFile,
+        },
+      );
+      cleanupPids.push(child.pid!);
+
+      await new Promise<void>((resolve) => {
+        child.on('close', () => resolve());
+      });
+
+      const content = await readFile(logFile, 'utf-8');
+      const lines = content.trim().split('\n');
+      expect(lines.length).toBe(1);
+      const parsed = JSON.parse(lines[0]);
+      expect(parsed.type).toBe('assistant');
+      expect(parsed.text).toBe('hello');
+      expect(typeof parsed.timestamp).toBe('string');
+      // Verify it's a valid ISO 8601 date
+      const d = new Date(parsed.timestamp);
+      expect(d.getTime()).not.toBeNaN();
+    });
+
+    it('handles multiple JSONL lines', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'ralph-proc-'));
+      cleanupDirs.push(dir);
+      const logFile = join(dir, 'output.log');
+
+      const line1 = JSON.stringify({ id: 1 });
+      const line2 = JSON.stringify({ id: 2 });
+      const child = spawnWithCapture(
+        'node',
+        ['-e', `process.stdout.write(${JSON.stringify(line1 + '\n' + line2 + '\n')})`],
+        { logFile },
+      );
+      cleanupPids.push(child.pid!);
+
+      await new Promise<void>((resolve) => {
+        child.on('close', () => resolve());
+      });
+
+      const content = await readFile(logFile, 'utf-8');
+      const lines = content.trim().split('\n');
+      expect(lines.length).toBe(2);
+      for (const line of lines) {
+        const parsed = JSON.parse(line);
+        expect(typeof parsed.timestamp).toBe('string');
+      }
+      expect(JSON.parse(lines[0]).id).toBe(1);
+      expect(JSON.parse(lines[1]).id).toBe(2);
+    });
+
+    it('passes non-JSON lines through unchanged', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'ralph-proc-'));
+      cleanupDirs.push(dir);
+      const logFile = join(dir, 'output.log');
+
+      const child = spawnWithCapture('node', ['-e', 'process.stdout.write("plain text line\\n")'], {
+        logFile,
+      });
+      cleanupPids.push(child.pid!);
+
+      await new Promise<void>((resolve) => {
+        child.on('close', () => resolve());
+      });
+
+      const content = await readFile(logFile, 'utf-8');
+      expect(content.trim()).toBe('plain text line');
+    });
+
+    it('passes stderr through unchanged (no timestamp injection)', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'ralph-proc-'));
+      cleanupDirs.push(dir);
+      const logFile = join(dir, 'output.log');
+
+      const jsonLine = JSON.stringify({ error: true });
+      const child = spawnWithCapture(
+        'node',
+        ['-e', `process.stderr.write(${JSON.stringify(jsonLine + '\n')})`],
+        { logFile },
+      );
+      cleanupPids.push(child.pid!);
+
+      await new Promise<void>((resolve) => {
+        child.on('close', () => resolve());
+      });
+
+      const content = await readFile(logFile, 'utf-8');
+      const parsed = JSON.parse(content.trim());
+      // stderr should NOT have timestamp injected
+      expect(parsed.timestamp).toBeUndefined();
+      expect(parsed.error).toBe(true);
+    });
+
+    it('handles partial line buffering (data split across chunks)', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'ralph-proc-'));
+      cleanupDirs.push(dir);
+      const logFile = join(dir, 'output.log');
+
+      // Write a JSON line in two separate chunks to test buffering
+      const child = spawnWithCapture(
+        'node',
+        [
+          '-e',
+          "process.stdout.write('{\"par'); setTimeout(() => process.stdout.write('tial\":true}\\n'), 50)",
+        ],
+        { logFile },
+      );
+      cleanupPids.push(child.pid!);
+
+      await new Promise<void>((resolve) => {
+        child.on('close', () => resolve());
+      });
+
+      const content = await readFile(logFile, 'utf-8');
+      const parsed = JSON.parse(content.trim());
+      expect(parsed.partial).toBe(true);
+      expect(typeof parsed.timestamp).toBe('string');
+    });
+
+    it('uses current time for the timestamp', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'ralph-proc-'));
+      cleanupDirs.push(dir);
+      const logFile = join(dir, 'output.log');
+
+      const before = Date.now();
+      const jsonLine = JSON.stringify({ check: 'time' });
+      const child = spawnWithCapture(
+        'node',
+        ['-e', `process.stdout.write(${JSON.stringify(jsonLine + '\n')})`],
+        { logFile },
+      );
+      cleanupPids.push(child.pid!);
+
+      await new Promise<void>((resolve) => {
+        child.on('close', () => resolve());
+      });
+      const after = Date.now();
+
+      const content = await readFile(logFile, 'utf-8');
+      const parsed = JSON.parse(content.trim());
+      const ts = new Date(parsed.timestamp).getTime();
+      expect(ts).toBeGreaterThanOrEqual(before);
+      expect(ts).toBeLessThanOrEqual(after);
+    });
+  });
 });
