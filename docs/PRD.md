@@ -192,7 +192,7 @@ Real-time status display showing progress and current activity.
 - Ralph status (RUNNING / BETWEEN TASKS / STOPPED)
 - Progress bar with task counts (done/total, percentage)
 - Current task ID and title
-- Phase timeline with per-phase durations — completed phases show elapsed time (e.g., `● Boot (45s) → ● Red (1m 12s) → ● Green (2:30) → ○ Verify → ○ Commit`), the active phase shows a live timer that updates each refresh
+- Phase timeline with per-phase durations — completed phases show elapsed time and the active phase shows a live timer that updates each refresh, both using the same format (e.g., `● Boot (45s) → ● Red (1m 12s) → ● Green (2m 30s) → ○ Verify → ○ Commit`)
 - Phases should always display when RUNNING (even if no phase markers found yet — show all as `○`)
 - Last log line — the most recent text content from the agent, truncated to fit the terminal width, so the user can follow along in real time
 
@@ -263,8 +263,14 @@ Calculate and display token usage and estimated cost from ralph log files.
 Ralph stores iteration logs in `.ralph-logs/` as JSONL files.
 
 - Naming: `T-NNN-YYYYMMDD-HHMMSS.jsonl`
-- Content: Agent's JSON stream output (tool calls, text, usage, errors)
+- Content: Agent's JSON stream output (tool calls, text, usage, errors), enriched with timestamps
 - Used by `ralph cost` and `ralph monitor` for analysis
+
+### 4.1 Timestamp Injection
+
+The agent CLI's raw JSONL output does not include timestamps. Ralph must inject a `timestamp` field (ISO 8601) into each JSONL line as it is written to the log file. This is required for the monitor's per-phase durations and live timer (§3.3) to function.
+
+The log capture layer (`spawnWithCapture`) must not pipe raw output directly to the log file. Instead, it must buffer incoming data into complete lines, parse each line as JSON, inject `"timestamp": "<ISO 8601>"`, re-serialize, and write the enriched line. Non-JSON lines (e.g., stderr) should be written as-is.
 
 ## 5. The Boot Prompt
 
