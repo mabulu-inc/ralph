@@ -1,8 +1,8 @@
-# @simplicity/ralph — Claude Code Instructions
+# @mabulu-inc/ralph — Claude Code Instructions
 
 ## Project Goal
 
-Build `@simplicity/ralph` — a CLI tool implementing the Ralph Methodology (stateless, PRD-driven AI development automated by AI coding agents).
+Build `@mabulu-inc/ralph` — a CLI tool implementing the Ralph Methodology (stateless, PRD-driven AI development automated by AI coding agents).
 Requirements are defined in `docs/PRD.md`.
 
 ## Methodology

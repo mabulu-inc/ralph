@@ -77,7 +77,7 @@ describe('Publish workflow', () => {
     expect(setupNode).toBeDefined();
     const nodeWith = setupNode!.with as Record<string, unknown>;
     expect(String(nodeWith['node-version'])).toBe('20');
-    expect(nodeWith['registry-url']).toBe('https://registry.npmjs.org');
+    expect(nodeWith['registry-url']).toBe('https://npm.pkg.github.com');
   });
 
   it('runs pnpm install with frozen lockfile', () => {
@@ -129,7 +129,7 @@ describe('Publish workflow', () => {
     );
     expect(publishStep).toBeDefined();
     const env = publishStep!.env as Record<string, unknown>;
-    expect(env.NODE_AUTH_TOKEN).toBe('${{ secrets.NPM_TOKEN }}');
+    expect(env.NODE_AUTH_TOKEN).toBe('${{ secrets.GITHUB_TOKEN }}');
   });
 
   it('runs pnpm check before pnpm publish', () => {

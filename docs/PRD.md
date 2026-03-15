@@ -1,8 +1,8 @@
-# @simplicity/ralph — Product Requirements Document
+# @mabulu-inc/ralph — Product Requirements Document
 
 A CLI tool that implements the Ralph Methodology: stateless, PRD-driven AI development automated by AI coding agents.
 
-Any project can `npx @simplicity/ralph init` to bootstrap, then `ralph loop` to build.
+Any project can `npx @mabulu-inc/ralph init` to bootstrap, then `ralph loop` to build.
 
 ## 1. Task File Format
 
