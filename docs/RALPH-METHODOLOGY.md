@@ -72,6 +72,16 @@ Every task must pass ALL gates before committing. No exceptions.
 - No code smells: no dead code, no commented-out blocks, no TODO/FIXME/HACK, no duplication
 - No security vulnerabilities
 
+## Commit Discipline
+
+Planning artifacts and implementation have separate commit flows:
+
+- **PRD changes** — commit before implementation. The PRD is the spec; it should be in place before the agent acts on it.
+- **New task files** — commit when you create them. Don't leave them unstaged for the loop to discard.
+- **Task status update** — committed by the agent in the same commit as the implementation (Status → DONE, SHA, notes).
+
+In short: humans commit the plan, the agent commits the work.
+
 ## Rules
 
 - **Behavioral tests only** — test outcomes, not implementation details
