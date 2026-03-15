@@ -119,7 +119,7 @@ The main AI development loop. Runs the configured AI coding agent in stateless i
 
 1. **Pre-flight** — verify the configured agent CLI is installed and on PATH, `docs/tasks/` exists, `docs/prompts/boot.md` exists
 2. **Database** — if project has Docker Compose, start containers before each iteration
-3. **Clean slate** — discard unstaged changes from crashed iterations
+3. **Clean slate** — discard unstaged changes from crashed iterations, except in protected planning paths (`docs/tasks/`, `docs/PRD.md`, `docs/prompts/`, `docs/RALPH-METHODOLOGY.md`, `ralph.config.json`). These human-authored planning artifacts must survive the clean slate so users can queue task files, PRD edits, and prompt changes between iterations without committing first.
 4. **Find next task** — scan task files, select lowest-numbered eligible TODO
 5. **Build prompt** — load the boot prompt template from `docs/prompts/boot.md`, interpolate task and config variables
 6. **Launch agent** — spawn the configured agent CLI with the rendered prompt and resolved model (task-level model overrides project default; see §10)
