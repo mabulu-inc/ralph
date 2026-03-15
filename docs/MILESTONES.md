@@ -89,4 +89,8 @@
 - [x] T-050: Remove --no-db flag dead code — $0.31
 - [x] T-051: Inject timestamps into JSONL log lines — $0.46
 
-**Grand Total: $41.19**
+## 12 — Documentation ($1.46)
+
+- [x] T-053: Add README and GitHub Pages documentation site — $1.46
+
+**Grand Total: $42.65**
