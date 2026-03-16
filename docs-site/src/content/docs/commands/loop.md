@@ -15,7 +15,7 @@ The main AI development loop. Runs the configured AI coding agent in stateless i
 
 Each iteration:
 
-1. **Pre-flight** — verify agent CLI is installed, `docs/tasks/` and `docs/prompts/boot.md` exist
+1. **Pre-flight** — verify agent CLI is installed, `docs/tasks/` and `docs/prompts/boot.md` exist, and quality check passes (aborts by default if it fails — use `--allow-dirty` to override)
 2. **Database** — start Docker containers if configured
 3. **Clean slate** — discard unstaged changes from crashed iterations
 4. **Find next task** — select lowest-numbered eligible TODO
@@ -38,6 +38,7 @@ Each iteration:
 | `--dry-run`                 | Print config and exit                | off              |
 | `--no-push`                 | Don't auto-push after iterations     | off              |
 | `--no-db`                   | Skip database startup                | off              |
+| `--allow-dirty`             | Proceed despite pre-existing quality-check failures | off |
 | `--agent <name>`            | Override configured agent            | from config      |
 
 ## Task Complexity Scaling

@@ -153,6 +153,7 @@ The main AI development loop. Runs the configured AI coding agent in stateless i
 - `--dry-run` — print config and exit
 - `--no-push` — don't auto-push after iterations
 - `--no-db` — skip database startup
+- `--allow-dirty` — proceed even if the quality-check preflight finds pre-existing failures (default: abort)
 - `--agent <name>` — override the configured agent for this run
 
 **Task Complexity Scaling:**
