@@ -14,7 +14,7 @@ export interface Task {
   id: string;
   number: number;
   title: string;
-  status: 'TODO' | 'DONE';
+  status: 'TODO' | 'DONE' | 'BLOCKED';
   milestone: string;
   depends: string[];
   prdReference: string;
@@ -25,6 +25,7 @@ export interface Task {
   cost: string | undefined;
   complexity: ComplexityTier | undefined;
   blocked: boolean;
+  blockedReason: string | undefined;
   description: string;
   producesCount: number;
 }
@@ -59,14 +60,15 @@ export function parseTaskFile(filename: string, content: string): Task {
   const title = headingMatch ? headingMatch[2].trim() : '';
   const number = parseInt(id.replace('T-', ''), 10);
 
-  const status = (extractFieldFromAst(tree, 'Status') as 'TODO' | 'DONE') ?? 'TODO';
+  const status = (extractFieldFromAst(tree, 'Status') as 'TODO' | 'DONE' | 'BLOCKED') ?? 'TODO';
   const milestone = extractFieldFromAst(tree, 'Milestone') ?? '';
   const depends = parseDeps(extractFieldFromAst(tree, 'Depends'));
   const prdReference = extractFieldFromAst(tree, 'PRD Reference') ?? '';
   const completed = extractFieldFromAst(tree, 'Completed');
   const commit = extractFieldFromAst(tree, 'Commit');
   const cost = extractFieldFromAst(tree, 'Cost');
-  const blocked = hasSection(tree, 'Blocked');
+  const blocked = hasSection(tree, 'Blocked') || status === 'BLOCKED';
+  const blockedReason = extractFieldFromAst(tree, 'Blocked reason');
   const touchesRaw = extractFieldFromAst(tree, 'Touches');
   const touches = parseTouches(touchesRaw);
   const hints = extractSectionFirstParagraph(tree, 'Hints');
@@ -90,6 +92,7 @@ export function parseTaskFile(filename: string, content: string): Task {
     cost,
     complexity,
     blocked,
+    blockedReason,
     description,
     producesCount,
   };
@@ -118,14 +121,16 @@ export function findNextTask(tasks: Task[]): Task | undefined {
   );
 }
 
-export function countByStatus(tasks: Task[]): { TODO: number; DONE: number } {
+export function countByStatus(tasks: Task[]): { TODO: number; DONE: number; BLOCKED: number } {
   let todo = 0;
   let done = 0;
+  let blocked = 0;
   for (const t of tasks) {
     if (t.status === 'DONE') done++;
+    else if (t.status === 'BLOCKED') blocked++;
     else todo++;
   }
-  return { TODO: todo, DONE: done };
+  return { TODO: todo, DONE: done, BLOCKED: blocked };
 }
 
 export function allDone(tasks: Task[]): boolean {

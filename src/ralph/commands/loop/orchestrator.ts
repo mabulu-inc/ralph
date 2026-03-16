@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanTasks, findNextTask, allDone, countByStatus } from '../../core/tasks.js';
 import { readConfig } from '../../core/config.js';
@@ -8,6 +8,7 @@ import { spawnWithCapture, monitorProcess } from '../../core/process.js';
 import { writePidFile, removePidFile } from '../../core/pid-file.js';
 import { loadLayeredPrompt } from '../../core/prompt-template.js';
 import { buildRetryContext } from '../../core/retry-context.js';
+import { updateField } from '../../core/markdown.js';
 import { parseSessionResult } from '../../core/jsonl-result.js';
 import { run as runShas } from '../shas.js';
 import { run as runCost } from '../cost.js';
@@ -68,6 +69,16 @@ export class LoopOrchestrator {
           'No eligible task found (remaining tasks may be blocked or have unmet dependencies)',
         );
         return;
+      }
+
+      const attempts = await this.countTaskAttempts(nextTask.id);
+      if (attempts >= config.maxRetries) {
+        const reason = `Failed ${attempts} times — exceeded max retries (${config.maxRetries})`;
+        await this.markTaskBlocked(nextTask.id, reason);
+        console.log(
+          `[Iteration ${iteration}] ${nextTask.id} BLOCKED after ${attempts} failures (max ${config.maxRetries})`,
+        );
+        continue;
       }
 
       const scaling = scaleForComplexity(nextTask);
@@ -216,6 +227,24 @@ export class LoopOrchestrator {
     }
 
     console.log('Loop complete');
+  }
+
+  private async countTaskAttempts(taskId: string): Promise<number> {
+    try {
+      const entries = await readdir(this.logsDir);
+      const prefix = `${taskId}-`;
+      return entries.filter((f) => f.startsWith(prefix) && f.endsWith('.jsonl')).length;
+    } catch {
+      return 0;
+    }
+  }
+
+  private async markTaskBlocked(taskId: string, reason: string): Promise<void> {
+    const filePath = join(this.tasksDir, `${taskId}.md`);
+    let content = await readFile(filePath, 'utf-8');
+    content = updateField(content, 'Status', 'BLOCKED');
+    content = updateField(content, 'Blocked reason', reason, ['Status']);
+    await writeFile(filePath, content);
   }
 
   private async postIterationUpdates(iteration: number): Promise<void> {

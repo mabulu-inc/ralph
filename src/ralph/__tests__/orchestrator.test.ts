@@ -713,6 +713,99 @@ describe('LoopOrchestrator', () => {
     expect(errors).toContain('exited with code 1');
   });
 
+  it('marks task as BLOCKED after maxRetries failures and moves on', async () => {
+    resetRegistry();
+    resetProviderInit();
+
+    // Setup with ralph.config.json that has maxRetries: 2
+    await mkdir(join(tmpDir, 'docs', 'tasks'), { recursive: true });
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'ralph.config.json'),
+      JSON.stringify({
+        language: 'TypeScript',
+        packageManager: 'pnpm',
+        testingFramework: 'Vitest',
+        qualityCheck: 'pnpm check',
+        testCommand: 'pnpm test',
+        maxRetries: 2,
+      }),
+    );
+    await writeFile(join(tmpDir, 'docs', 'tasks', 'T-001.md'), TODO_TASK);
+    await writeFile(
+      join(tmpDir, 'docs', 'tasks', 'T-002.md'),
+      `# T-002: Second task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nAnother task.\n`,
+    );
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}: {{task.title}}\nConfig: {{config.language}}\n{{retryContext}}',
+    );
+
+    // Create 2 existing log files for T-001 (simulating 2 prior failures)
+    const logsDir = join(tmpDir, '.ralph-logs');
+    await mkdir(logsDir, { recursive: true });
+    await writeFile(join(logsDir, 'T-001-20250101-120000.jsonl'), '{}');
+    await writeFile(join(logsDir, 'T-001-20250101-130000.jsonl'), '{}');
+
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 1 }));
+    await orchestrator.execute();
+
+    // T-001 should now be BLOCKED in the task file
+    const { readFile: rf } = await import('node:fs/promises');
+    const t001Content = await rf(join(tmpDir, 'docs', 'tasks', 'T-001.md'), 'utf-8');
+    expect(t001Content).toContain('**Status**: BLOCKED');
+    expect(t001Content).toContain('**Blocked reason**:');
+
+    // The orchestrator should have moved on to T-002
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('T-001');
+    expect(output).toContain('BLOCKED');
+  });
+
+  it('does not mark task as BLOCKED when retries are under the limit', async () => {
+    resetRegistry();
+    resetProviderInit();
+
+    await mkdir(join(tmpDir, 'docs', 'tasks'), { recursive: true });
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'ralph.config.json'),
+      JSON.stringify({
+        language: 'TypeScript',
+        packageManager: 'pnpm',
+        testingFramework: 'Vitest',
+        qualityCheck: 'pnpm check',
+        testCommand: 'pnpm test',
+        maxRetries: 3,
+      }),
+    );
+    await writeFile(join(tmpDir, 'docs', 'tasks', 'T-001.md'), TODO_TASK);
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}: {{task.title}}\nConfig: {{config.language}}\n{{retryContext}}',
+    );
+
+    // Only 1 existing log file (under maxRetries of 3)
+    const logsDir = join(tmpDir, '.ralph-logs');
+    await mkdir(logsDir, { recursive: true });
+    await writeFile(join(logsDir, 'T-001-20250101-120000.jsonl'), '{}');
+
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 1, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 1 }));
+    await orchestrator.execute();
+
+    // T-001 should still be TODO
+    const { readFile: rf } = await import('node:fs/promises');
+    const t001Content = await rf(join(tmpDir, 'docs', 'tasks', 'T-001.md'), 'utf-8');
+    expect(t001Content).toContain('**Status**: TODO');
+    expect(t001Content).not.toContain('BLOCKED');
+  });
+
   it('injects retry context on timeout failure', async () => {
     resetRegistry();
     resetProviderInit();

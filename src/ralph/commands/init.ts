@@ -27,6 +27,7 @@ export interface InitAnswers {
   fileNaming?: string;
   agent?: string;
   model?: string;
+  maxRetries?: number;
 }
 
 export type OnConflict = (relativePath: string) => Promise<boolean>;
@@ -169,6 +170,10 @@ export async function loadExistingDefaults(rootDir: string): Promise<Partial<Ini
         (defaults as Record<string, unknown>)[field] = config[field];
       }
     }
+
+    if (typeof config['maxRetries'] === 'number') {
+      defaults.maxRetries = config['maxRetries'] as number;
+    }
   } catch {
     // No ralph.config.json
   }
@@ -237,7 +242,7 @@ export async function runInit(
     await writeFile(
       rootDir,
       'ralph.config.json',
-      generateRalphConfigJson(config, answers.agent ?? 'claude', answers.model),
+      generateRalphConfigJson(config, answers.agent ?? 'claude', answers.model, answers.maxRetries),
       onConflict,
       result,
     );
@@ -320,6 +325,12 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
       defaults.agent ?? 'claude',
     );
     const model = await prompt(rl, 'Model (optional)', defaults.model ?? '');
+    const maxRetriesStr = await prompt(
+      rl,
+      'Max retries per task before BLOCKED',
+      String(defaults.maxRetries ?? 3),
+    );
+    const maxRetries = parseInt(maxRetriesStr, 10) || 3;
 
     return {
       projectName,
@@ -332,6 +343,7 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
       database,
       agent: agent || 'claude',
       model: model || undefined,
+      maxRetries,
     };
   } finally {
     rl.close();

@@ -13,6 +13,7 @@ export interface ProjectConfig {
   database: string | undefined;
   agent: string | undefined;
   model: string | undefined;
+  maxRetries: number;
 }
 
 function parseConfigSection(content: string): Root {
@@ -51,6 +52,7 @@ export function parseConfig(content: string): ProjectConfig {
     database: extractConfigField(sectionTree, 'Database'),
     agent: undefined,
     model: undefined,
+    maxRetries: 3,
   };
 }
 
@@ -64,6 +66,7 @@ interface RalphConfigJsonData {
   model?: string;
   fileNaming?: string;
   database?: string;
+  maxRetries?: number;
 }
 
 const REQUIRED_JSON_FIELDS: (keyof RalphConfigJsonData)[] = [
@@ -94,6 +97,7 @@ function parseConfigJson(raw: string): ProjectConfig {
     database: typed.database ?? undefined,
     agent: typed.agent ?? undefined,
     model: typed.model ?? undefined,
+    maxRetries: typeof typed.maxRetries === 'number' ? typed.maxRetries : 3,
   };
 }
 

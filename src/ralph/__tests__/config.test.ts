@@ -81,6 +81,7 @@ describe('parseConfig', () => {
       database: 'PostgreSQL via Docker on port 5433',
       agent: undefined,
       model: undefined,
+      maxRetries: 3,
     });
   });
 
@@ -96,6 +97,7 @@ describe('parseConfig', () => {
       database: undefined,
       agent: undefined,
       model: undefined,
+      maxRetries: 3,
     });
   });
 
@@ -316,6 +318,53 @@ describe('readConfig', () => {
     const dir = await mkdtemp(join(tmpdir(), 'ralph-config-'));
     try {
       await expect(readConfig(dir)).rejects.toThrow(/ralph\.config\.json.*CLAUDE\.md|config/i);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads maxRetries from ralph.config.json', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+
+    const dir = await mkdtemp(join(tmpdir(), 'ralph-config-'));
+    const configData = {
+      language: 'TypeScript',
+      packageManager: 'pnpm',
+      testingFramework: 'Vitest',
+      qualityCheck: 'pnpm check',
+      testCommand: 'pnpm test',
+      maxRetries: 5,
+    };
+    await writeFile(join(dir, 'ralph.config.json'), JSON.stringify(configData));
+
+    try {
+      const config = await readConfig(dir);
+      expect(config.maxRetries).toBe(5);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('defaults maxRetries to 3 when not set in ralph.config.json', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+
+    const dir = await mkdtemp(join(tmpdir(), 'ralph-config-'));
+    const configData = {
+      language: 'TypeScript',
+      packageManager: 'pnpm',
+      testingFramework: 'Vitest',
+      qualityCheck: 'pnpm check',
+      testCommand: 'pnpm test',
+    };
+    await writeFile(join(dir, 'ralph.config.json'), JSON.stringify(configData));
+
+    try {
+      const config = await readConfig(dir);
+      expect(config.maxRetries).toBe(3);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

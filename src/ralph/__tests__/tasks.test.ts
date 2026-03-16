@@ -179,6 +179,23 @@ A task with explicit complexity.
 - \`src/heavy.ts\`
 `;
 
+const STATUS_BLOCKED_TASK = `# T-080: Status-blocked task
+
+- **Status**: BLOCKED
+- **Milestone**: 2 — Core Modules
+- **Depends**: T-000
+- **PRD Reference**: §2
+- **Blocked reason**: Failed 3 times — test suite crashes on missing fixture
+
+## Description
+
+This task was blocked by the orchestrator after repeated failures.
+
+## Produces
+
+- \`src/blocked.ts\`
+`;
+
 const TASK_WITH_INVALID_COMPLEXITY = `# T-071: Task with invalid complexity
 
 - **Status**: TODO
@@ -480,6 +497,17 @@ Test task.
     }
   });
 
+  it('parses BLOCKED status', () => {
+    const task = parseTaskFile('T-080.md', STATUS_BLOCKED_TASK);
+    expect(task.status).toBe('BLOCKED');
+    expect(task.blockedReason).toBe('Failed 3 times — test suite crashes on missing fixture');
+  });
+
+  it('returns empty blockedReason when field is absent', () => {
+    const task = parseTaskFile('T-010.md', MINIMAL_TASK);
+    expect(task.blockedReason).toBeUndefined();
+  });
+
   it('parses fields with mixed bold styles (underscore bold)', () => {
     const content = `# T-053: Underscore bold
 
@@ -604,6 +632,29 @@ describe('findNextTask', () => {
     const next = findNextTask(tasks);
     expect(next).toBeUndefined();
   });
+
+  it('skips tasks with status BLOCKED', () => {
+    const tasks: Task[] = [
+      parseTaskFile('T-000.md', DONE_TASK),
+      parseTaskFile('T-080.md', STATUS_BLOCKED_TASK), // BLOCKED, deps met
+      parseTaskFile('T-005.md', TODO_NO_DEPS),
+    ];
+    const next = findNextTask(tasks);
+    expect(next?.id).toBe('T-005');
+  });
+
+  it('does not treat BLOCKED tasks as DONE for dependency resolution', () => {
+    const blockedParent = STATUS_BLOCKED_TASK.replace('T-080', 'T-000').replace(
+      'Depends**: T-000',
+      'Depends**: none',
+    );
+    const tasks: Task[] = [
+      parseTaskFile('T-000.md', blockedParent),
+      parseTaskFile('T-001.md', TODO_TASK), // depends on T-000
+    ];
+    const next = findNextTask(tasks);
+    expect(next).toBeUndefined();
+  });
 });
 
 describe('countByStatus', () => {
@@ -614,12 +665,22 @@ describe('countByStatus', () => {
       parseTaskFile('T-005.md', TODO_NO_DEPS),
     ];
     const counts = countByStatus(tasks);
-    expect(counts).toEqual({ TODO: 2, DONE: 1 });
+    expect(counts).toEqual({ TODO: 2, DONE: 1, BLOCKED: 0 });
   });
 
   it('returns zeros for empty array', () => {
     const counts = countByStatus([]);
-    expect(counts).toEqual({ TODO: 0, DONE: 0 });
+    expect(counts).toEqual({ TODO: 0, DONE: 0, BLOCKED: 0 });
+  });
+
+  it('counts BLOCKED tasks separately', () => {
+    const tasks: Task[] = [
+      parseTaskFile('T-000.md', DONE_TASK),
+      parseTaskFile('T-080.md', STATUS_BLOCKED_TASK),
+      parseTaskFile('T-005.md', TODO_NO_DEPS),
+    ];
+    const counts = countByStatus(tasks);
+    expect(counts).toEqual({ TODO: 1, DONE: 1, BLOCKED: 1 });
   });
 });
 
