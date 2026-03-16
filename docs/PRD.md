@@ -15,6 +15,7 @@ Ralph's unit of work is a **task file** (`docs/tasks/T-NNN.md`). Each file has:
 - **Milestone**: N — Name
 - **Depends**: T-XXX, T-YYY (or "none")
 - **PRD Reference**: §N.N
+- **Complexity**: light | standard | heavy (optional — overrides auto-detection; see §1.3)
 - **Touches**: `path/to/file.ts`, `path/to/other.ts` (optional — files the task will read or modify)
 - **Model**: (optional — overrides project default, e.g., `claude-opus-4-20250514`)
 - **Completed**: YYYY-MM-DD HH:MM (Nm duration)
@@ -53,6 +54,18 @@ When a task is completed, update in the same commit:
 - `Completed` → timestamp with duration
 - `Commit` → the commit SHA
 - Add `## Completion Notes` section
+
+### 1.3 Complexity Tiers
+
+The `Complexity` field controls how many agent turns and wall-clock time the loop allocates to a task:
+
+| Tier       | Turns | Timeout | Use when…                                                             |
+| ---------- | ----- | ------- | --------------------------------------------------------------------- |
+| `light`    | 50    | 600s    | Single-file change, isolated unit, no cross-cutting concerns          |
+| `standard` | 75    | 900s    | Touches 2-3 files/packages, moderate test surface                     |
+| `heavy`    | 125   | 1200s   | Cross-package refactor, infrastructure overhaul, large test migration |
+
+If `Complexity` is omitted, the loop falls back to a keyword/dependency heuristic. Explicit values are preferred — the heuristic frequently underestimates cross-cutting tasks.
 
 ## 2. Project Configuration
 

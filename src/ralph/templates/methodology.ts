@@ -29,6 +29,7 @@ Each iteration is stateless: boot from disk, find next task, red/green TDD, comm
 - **Milestone**: N — Name
 - **Depends**: T-XXX, T-YYY (or "none")
 - **PRD Reference**: §N.N
+- **Complexity**: light | standard | heavy
 - **Completed**: YYYY-MM-DD HH:MM (Nm duration) ← added on completion
 - **Commit**: <SHA> ← added on completion
 
@@ -45,6 +46,18 @@ What to implement and why.
 
 What was done. Test count.
 \`\`\`
+
+### Complexity guide
+
+Set **Complexity** when creating a task. The loop uses it to allocate agent turns and timeout.
+
+| Tier       | Turns | Timeout | Use when…                                                         |
+| ---------- | ----- | ------- | ----------------------------------------------------------------- |
+| \`light\`    | 50    | 600s    | Single-file change, isolated unit, no cross-cutting concerns      |
+| \`standard\` | 75    | 900s    | Touches 2-3 files/packages, moderate test surface                 |
+| \`heavy\`    | 125   | 1200s   | Cross-package refactor, infrastructure overhaul, large test migration |
+
+If omitted, the loop falls back to an automated heuristic (less accurate).
 
 ## The Loop
 

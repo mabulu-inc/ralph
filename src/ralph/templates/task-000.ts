@@ -8,6 +8,7 @@ export function generateTask000(config: InitConfig): string {
     '- **Milestone**: 0 — Infrastructure',
     '- **Depends**: none',
     '- **PRD Reference**: §1',
+    '- **Complexity**: standard',
     '',
     '## Description',
     '',
