@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import * as readline from 'node:readline';
+import { Readable, Writable } from 'node:stream';
 
-import { runInit, loadExistingDefaults, type InitAnswers } from '../commands/init.js';
+import { runInit, loadExistingDefaults, prompt, type InitAnswers } from '../commands/init.js';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'ralph-init-'));
@@ -554,5 +556,86 @@ describe('run (CLI entry point)', () => {
   it('exports a run function', async () => {
     const mod = await import('../commands/init.js');
     expect(typeof mod.run).toBe('function');
+  });
+});
+
+describe('prompt helper', () => {
+  function createMockRl(answer: string): readline.Interface {
+    const rl = readline.createInterface({
+      input: new Readable({ read() {} }),
+      output: new Writable({ write() {} }),
+    });
+    // Override question to immediately return the answer
+    rl.question = ((_q: string, cb: (answer: string) => void) => {
+      cb(answer);
+    }) as typeof rl.question;
+    return rl;
+  }
+
+  it('formats question with default value in brackets', async () => {
+    const questions: string[] = [];
+    const rl = createMockRl('');
+    rl.question = ((q: string, cb: (answer: string) => void) => {
+      questions.push(q);
+      cb('');
+    }) as typeof rl.question;
+
+    await prompt(rl, 'Database', 'none');
+    expect(questions[0]).toBe('Database [none]: ');
+  });
+
+  it('formats question with options list', async () => {
+    const questions: string[] = [];
+    const rl = createMockRl('');
+    rl.question = ((q: string, cb: (answer: string) => void) => {
+      questions.push(q);
+      cb('');
+    }) as typeof rl.question;
+
+    await prompt(rl, 'Database', 'none', ['PostgreSQL', 'MySQL', 'SQLite', 'none']);
+    expect(questions[0]).toBe('Database (PostgreSQL, MySQL, SQLite, none) [none]: ');
+  });
+
+  it('shows options and default separately', async () => {
+    const questions: string[] = [];
+    const rl = createMockRl('');
+    rl.question = ((q: string, cb: (answer: string) => void) => {
+      questions.push(q);
+      cb('');
+    }) as typeof rl.question;
+
+    await prompt(rl, 'File naming convention', 'kebab-case', [
+      'kebab-case',
+      'snake_case',
+      'camelCase',
+    ]);
+    const q = questions[0];
+    // Options in parentheses, default in brackets
+    expect(q).toBe('File naming convention (kebab-case, snake_case, camelCase) [kebab-case]: ');
+  });
+
+  it('returns default when user presses enter', async () => {
+    const rl = createMockRl('');
+    const result = await prompt(rl, 'Database', 'none');
+    expect(result).toBe('none');
+  });
+
+  it('returns user input when provided', async () => {
+    const rl = createMockRl('PostgreSQL');
+    const result = await prompt(rl, 'Database', 'none');
+    expect(result).toBe('PostgreSQL');
+  });
+
+  it('shows no default suffix when no default provided', async () => {
+    const questions: string[] = [];
+    const rl = createMockRl('');
+    rl.question = ((q: string, cb: (answer: string) => void) => {
+      questions.push(q);
+      cb('');
+    }) as typeof rl.question;
+
+    await prompt(rl, 'Project name');
+    // Should just end with ": " — no parenthetical
+    expect(questions[0]).toBe('Project name: ');
   });
 });

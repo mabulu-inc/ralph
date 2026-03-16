@@ -248,10 +248,22 @@ export async function runInit(
   return result;
 }
 
-function prompt(rl: readline.Interface, question: string, defaultValue?: string): Promise<string> {
-  const suffix = defaultValue ? ` (${defaultValue})` : '';
+export function prompt(
+  rl: readline.Interface,
+  question: string,
+  defaultValue?: string,
+  options?: string[],
+): Promise<string> {
+  let text = question;
+  if (options && options.length > 0) {
+    text += ` (${options.join(', ')})`;
+  }
+  if (defaultValue) {
+    text += ` [${defaultValue}]`;
+  }
+  text += ': ';
   return new Promise((resolve) => {
-    rl.question(`${question}${suffix}: `, (answer) => {
+    rl.question(text, (answer) => {
       resolve(answer.trim() || defaultValue || '');
     });
   });
@@ -274,7 +286,12 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
   try {
     const projectName = await prompt(rl, 'Project name', defaults.projectName);
     const language = await prompt(rl, 'Language', defaults.language ?? 'TypeScript');
-    const fileNaming = await prompt(rl, 'File naming convention', defaults.fileNaming ?? '');
+    const fileNaming = await prompt(
+      rl,
+      'File naming convention',
+      defaults.fileNaming || 'kebab-case',
+      ['kebab-case', 'snake_case', 'camelCase'],
+    );
     const packageManager = await prompt(rl, 'Package manager', defaults.packageManager ?? 'pnpm');
     const testingFramework = await prompt(
       rl,
@@ -291,7 +308,12 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
       'Test command',
       defaults.testCommand ?? `${packageManager} test`,
     );
-    const database = await prompt(rl, 'Database', defaults.database ?? 'none');
+    const database = await prompt(rl, 'Database', defaults.database ?? 'none', [
+      'PostgreSQL',
+      'MySQL',
+      'SQLite',
+      'none',
+    ]);
     const agent = await prompt(
       rl,
       'AI agent (claude, gemini, codex, continue, cursor)',
