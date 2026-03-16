@@ -1,4 +1,13 @@
-const COMMANDS = ['init', 'loop', 'monitor', 'kill', 'milestones', 'shas', 'cost'] as const;
+const COMMANDS = [
+  'init',
+  'loop',
+  'monitor',
+  'kill',
+  'milestones',
+  'shas',
+  'cost',
+  'update',
+] as const;
 type Command = (typeof COMMANDS)[number];
 
 export type DispatchResult =
@@ -37,6 +46,7 @@ export function formatHelp(unknown?: string): string {
   lines.push('  milestones  Generate milestones summary');
   lines.push('  shas        Backfill commit SHAs in task files');
   lines.push('  cost        Calculate token usage and costs');
+  lines.push('  update      Refresh methodology and prompt templates');
 
   return lines.join('\n');
 }
