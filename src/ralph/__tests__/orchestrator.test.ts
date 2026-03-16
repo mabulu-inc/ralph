@@ -9,6 +9,10 @@ vi.mock('../core/process.js', () => ({
   killProcessTree: vi.fn(),
 }));
 
+vi.mock('../core/jsonl-result.js', () => ({
+  parseSessionResult: vi.fn(),
+}));
+
 vi.mock('../core/pid-file.js', () => ({
   writePidFile: vi.fn(),
   removePidFile: vi.fn(),
@@ -38,6 +42,7 @@ vi.mock('../commands/milestones.js', () => ({
 }));
 
 import * as processModule from '../core/process.js';
+import * as jsonlModule from '../core/jsonl-result.js';
 import * as gitModule from '../core/git.js';
 import * as shasModule from '../commands/shas.js';
 import * as costModule from '../commands/cost.js';
@@ -49,6 +54,7 @@ import { resetProviderInit } from '../providers/index.js';
 
 const spawnWithCapture = vi.mocked(processModule.spawnWithCapture);
 const monitorProcess = vi.mocked(processModule.monitorProcess);
+const parseSessionResult = vi.mocked(jsonlModule.parseSessionResult);
 const discardUnstaged = vi.mocked(gitModule.discardUnstaged);
 const getHeadSha = vi.mocked(gitModule.getHeadSha);
 const hasUnpushedCommits = vi.mocked(gitModule.hasUnpushedCommits);
@@ -101,6 +107,7 @@ describe('LoopOrchestrator', () => {
     shasRun.mockResolvedValue(undefined);
     costRun.mockResolvedValue(undefined);
     milestonesRun.mockResolvedValue(undefined);
+    parseSessionResult.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -632,6 +639,78 @@ describe('LoopOrchestrator', () => {
     await orchestrator.execute();
 
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('metadata commit'));
+  });
+
+  it('logs complexity tier and effective limits at iteration start', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('Complexity: light');
+    expect(output).toContain('50 turns');
+    expect(output).toContain('600s timeout');
+  });
+
+  it('logs specific message when session hits max turns', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 1, timedOut: false });
+    parseSessionResult.mockResolvedValue({
+      subtype: 'error_max_turns',
+      numTurns: 50,
+      stopReason: 'max_turns',
+    });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const errors = errorSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(errors).toContain('exhausted all 50 turns');
+    expect(errors).toContain('light');
+    expect(errors).toContain('--max-turns');
+  });
+
+  it('logs turns used on successful commit', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValueOnce('aaa1111').mockResolvedValueOnce('bbb2222');
+    parseSessionResult.mockResolvedValue({
+      subtype: 'success',
+      numTurns: 42,
+      stopReason: 'end_turn',
+    });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('used 42/50 turns');
+  });
+
+  it('falls back to generic error when JSONL parse returns no result', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 1, timedOut: false });
+    parseSessionResult.mockResolvedValue(undefined);
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const errors = errorSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(errors).toContain('exited with code 1');
   });
 
   it('injects retry context on timeout failure', async () => {

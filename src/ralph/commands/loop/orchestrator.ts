@@ -8,6 +8,7 @@ import { spawnWithCapture, monitorProcess } from '../../core/process.js';
 import { writePidFile, removePidFile } from '../../core/pid-file.js';
 import { loadLayeredPrompt } from '../../core/prompt-template.js';
 import { buildRetryContext } from '../../core/retry-context.js';
+import { parseSessionResult } from '../../core/jsonl-result.js';
 import { run as runShas } from '../shas.js';
 import { run as runCost } from '../cost.js';
 import { run as runMilestones } from '../milestones.js';
@@ -75,6 +76,9 @@ export class LoopOrchestrator {
 
       console.log(`[Iteration ${iteration}] Starting ${nextTask.id}: ${nextTask.title}`);
       console.log(`  Progress: ${counts.DONE}/${counts.DONE + counts.TODO} tasks done`);
+      console.log(
+        `  Complexity: ${scaling.tier} (${effectiveMaxTurns} turns, ${effectiveTimeout}s timeout)`,
+      );
 
       const discardError = await this.gitService.discardUnstaged();
       if (discardError) {
@@ -158,7 +162,15 @@ export class LoopOrchestrator {
       }
 
       if (result.exitCode !== 0) {
-        console.error(`[Iteration ${iteration}] Claude exited with code ${result.exitCode}`);
+        const sessionResult = await parseSessionResult(logFile);
+        if (sessionResult?.subtype === 'error_max_turns') {
+          const turns = sessionResult.numTurns ?? effectiveMaxTurns;
+          console.error(
+            `[Iteration ${iteration}] ${nextTask.id} exhausted all ${turns} turns (${scaling.tier} tier) without completing. Consider increasing --max-turns or splitting the task.`,
+          );
+        } else {
+          console.error(`[Iteration ${iteration}] Claude exited with code ${result.exitCode}`);
+        }
         lastFailedTaskId = nextTask.id;
         continue;
       }
@@ -172,7 +184,14 @@ export class LoopOrchestrator {
       const headAfter = headAfterResult.sha;
 
       if (headBefore && headAfter && headBefore !== headAfter) {
-        console.log(`[Iteration ${iteration}] Commit detected: ${headAfter.slice(0, 7)}`);
+        const sessionResult = await parseSessionResult(logFile);
+        const turnsInfo =
+          sessionResult?.numTurns !== undefined
+            ? ` (used ${sessionResult.numTurns}/${effectiveMaxTurns} turns)`
+            : '';
+        console.log(
+          `[Iteration ${iteration}] Commit detected: ${headAfter.slice(0, 7)}${turnsInfo}`,
+        );
         lastFailedTaskId = undefined;
 
         await this.postIterationUpdates(iteration);
