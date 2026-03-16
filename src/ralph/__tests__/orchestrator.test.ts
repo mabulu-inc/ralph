@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, rm, readFile } from 'node:fs/promises';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -1085,6 +1085,52 @@ describe('LoopOrchestrator', () => {
 
     const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
     expect(output).toContain('loop budget exceeded');
+  });
+
+  it('writes loop-start.json snapshot before first iteration', async () => {
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const snapshotPath = join(tmpDir, '.ralph-logs', 'loop-start.json');
+    const raw = await readFile(snapshotPath, 'utf-8');
+    const snapshot = JSON.parse(raw);
+    expect(snapshot.doneAtStart).toBe(0);
+    expect(snapshot.total).toBe(1);
+    expect(typeof snapshot.startedAt).toBe('string');
+  });
+
+  it('records correct doneAtStart when some tasks already completed', async () => {
+    await mkdir(join(tmpDir, 'docs', 'tasks'), { recursive: true });
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await mkdir(join(tmpDir, '.claude'), { recursive: true });
+    await writeFile(join(tmpDir, '.claude', 'CLAUDE.md'), CLAUDE_MD);
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}: {{task.title}}\nConfig: {{config.language}}\n{{retryContext}}',
+    );
+    await writeFile(
+      join(tmpDir, 'docs', 'tasks', 'T-001.md'),
+      `# T-001: Done task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+    await writeFile(
+      join(tmpDir, 'docs', 'tasks', 'T-002.md'),
+      `# T-002: Todo task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nTodo.\n`,
+    );
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const snapshotPath = join(tmpDir, '.ralph-logs', 'loop-start.json');
+    const raw = await readFile(snapshotPath, 'utf-8');
+    const snapshot = JSON.parse(raw);
+    expect(snapshot.doneAtStart).toBe(1);
+    expect(snapshot.total).toBe(2);
   });
 
   it('injects retry context on timeout failure', async () => {

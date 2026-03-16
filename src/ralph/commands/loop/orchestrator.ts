@@ -74,10 +74,23 @@ export class LoopOrchestrator {
     }
   }
 
+  private async writeLoopStartSnapshot(): Promise<void> {
+    const tasks = await scanTasks(this.tasksDir);
+    const counts = countByStatus(tasks);
+    const snapshot = {
+      doneAtStart: counts.DONE,
+      total: counts.DONE + counts.TODO,
+      startedAt: new Date().toISOString(),
+    };
+    await writeFile(join(this.logsDir, 'loop-start.json'), JSON.stringify(snapshot));
+  }
+
   private async executeLoop(
     config: Awaited<ReturnType<typeof readConfig>>,
     preflightBaseline = '',
   ): Promise<void> {
+    await this.writeLoopStartSnapshot();
+
     let lastFailedTaskId: string | undefined;
     let loopSpend = 0;
 

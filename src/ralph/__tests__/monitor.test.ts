@@ -22,8 +22,11 @@ import {
   readLogTail,
   scanLogForPhases,
   formatElapsed,
+  readLoopStartSnapshot,
+  formatRunProgress,
   type RunResult,
   type PhaseTimestamp,
+  type LoopStartSnapshot,
 } from '../commands/monitor.js';
 
 describe('parsePhases', () => {
@@ -1189,5 +1192,169 @@ describe('ralph monitor (run)', () => {
 
     const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
     expect(output).toContain('--json');
+  });
+});
+
+describe('readLoopStartSnapshot', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ralph-snapshot-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads a valid snapshot file', async () => {
+    const snapshot: LoopStartSnapshot = {
+      doneAtStart: 70,
+      total: 89,
+      startedAt: '2026-03-10T12:00:00Z',
+    };
+    await writeFile(join(dir, 'loop-start.json'), JSON.stringify(snapshot));
+
+    const result = await readLoopStartSnapshot(dir);
+    expect(result).toEqual(snapshot);
+  });
+
+  it('returns null when file does not exist', async () => {
+    const result = await readLoopStartSnapshot(dir);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for invalid JSON', async () => {
+    await writeFile(join(dir, 'loop-start.json'), 'not json');
+    const result = await readLoopStartSnapshot(dir);
+    expect(result).toBeNull();
+  });
+
+  it('returns null when required fields are missing', async () => {
+    await writeFile(join(dir, 'loop-start.json'), JSON.stringify({ doneAtStart: 5 }));
+    const result = await readLoopStartSnapshot(dir);
+    expect(result).toBeNull();
+  });
+});
+
+describe('formatRunProgress', () => {
+  it('formats per-invocation progress line', () => {
+    const result = formatRunProgress(72, {
+      doneAtStart: 70,
+      total: 89,
+      startedAt: '2026-03-10T12:00:00Z',
+    });
+    expect(result).toBe('This run: 2/19 tasks completed');
+  });
+
+  it('shows zero progress when nothing new completed', () => {
+    const result = formatRunProgress(70, {
+      doneAtStart: 70,
+      total: 89,
+      startedAt: '2026-03-10T12:00:00Z',
+    });
+    expect(result).toBe('This run: 0/19 tasks completed');
+  });
+
+  it('shows all completed when everything done', () => {
+    const result = formatRunProgress(89, {
+      doneAtStart: 70,
+      total: 89,
+      startedAt: '2026-03-10T12:00:00Z',
+    });
+    expect(result).toBe('This run: 19/19 tasks completed');
+  });
+
+  it('handles case where total increased since snapshot', () => {
+    // total was 89 at snapshot time, now there are 95 tasks, 75 done
+    const result = formatRunProgress(75, {
+      doneAtStart: 70,
+      total: 89,
+      startedAt: '2026-03-10T12:00:00Z',
+    });
+    expect(result).toBe('This run: 5/19 tasks completed');
+  });
+});
+
+describe('formatMonitorOutput with per-invocation progress', () => {
+  it('includes per-invocation line when snapshot is present', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 72,
+      total: 89,
+      currentTaskId: 'T-073',
+      currentTaskTitle: 'Some feature',
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      loopStartSnapshot: { doneAtStart: 70, total: 89, startedAt: '2026-03-10T12:00:00Z' },
+    });
+    expect(output).toContain('This run: 2/19 tasks completed');
+  });
+
+  it('omits per-invocation line when no snapshot', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 72,
+      total: 89,
+      currentTaskId: 'T-073',
+      currentTaskTitle: 'Some feature',
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+    });
+    expect(output).not.toContain('This run:');
+  });
+});
+
+describe('collectMonitorData reads loop-start snapshot', () => {
+  let dir: string;
+  let logsDir: string;
+  let tasksDir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ralph-monitor-snapshot-'));
+    logsDir = join(dir, '.ralph-logs');
+    tasksDir = join(dir, 'docs', 'tasks');
+    await mkdir(logsDir, { recursive: true });
+    await mkdir(tasksDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('includes snapshot in monitor data when file exists', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+    await writeFile(
+      join(tasksDir, 'T-002.md'),
+      `# T-002: Second task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §2\n\n## Description\n\nPending.\n`,
+    );
+
+    const snapshot: LoopStartSnapshot = {
+      doneAtStart: 0,
+      total: 2,
+      startedAt: '2026-03-10T12:00:00Z',
+    };
+    await writeFile(join(logsDir, 'loop-start.json'), JSON.stringify(snapshot));
+
+    const data = await collectMonitorData(tasksDir, logsDir);
+    expect(data).not.toBeNull();
+    expect(data!.loopStartSnapshot).toEqual(snapshot);
+  });
+
+  it('omits snapshot when file does not exist', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: DONE\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nDone.\n`,
+    );
+
+    const data = await collectMonitorData(tasksDir, logsDir);
+    expect(data).not.toBeNull();
+    expect(data!.loopStartSnapshot).toBeUndefined();
   });
 });

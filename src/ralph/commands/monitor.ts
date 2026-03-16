@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { open, readdir, stat } from 'node:fs/promises';
+import { open, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { scanTasks, countByStatus, type Task } from '../core/tasks.js';
@@ -177,6 +177,35 @@ export async function findLatestLogFile(logsDir: string): Promise<string | null>
 export function extractTaskIdFromLog(filename: string): string | null {
   const match = filename.match(/^(T-\d+)/);
   return match ? match[1] : null;
+}
+
+export interface LoopStartSnapshot {
+  doneAtStart: number;
+  total: number;
+  startedAt: string;
+}
+
+export async function readLoopStartSnapshot(logsDir: string): Promise<LoopStartSnapshot | null> {
+  try {
+    const raw = await readFile(join(logsDir, 'loop-start.json'), 'utf-8');
+    const obj = JSON.parse(raw);
+    if (
+      typeof obj.doneAtStart === 'number' &&
+      typeof obj.total === 'number' &&
+      typeof obj.startedAt === 'string'
+    ) {
+      return obj as LoopStartSnapshot;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function formatRunProgress(currentDone: number, snapshot: LoopStartSnapshot): string {
+  const completedThisRun = currentDone - snapshot.doneAtStart;
+  const remainingAtStart = snapshot.total - snapshot.doneAtStart;
+  return `This run: ${completedThisRun}/${remainingAtStart} tasks completed`;
 }
 
 export async function readLogTail(filePath: string, maxBytes = 32768): Promise<string> {
@@ -435,12 +464,16 @@ export interface MonitorData {
   lastActivity: ToolUseInfo | null;
   loopSpend?: number;
   taskSpend?: number;
+  loopStartSnapshot?: LoopStartSnapshot;
 }
 
 export function formatMonitorOutput(data: MonitorData): string {
   const lines: string[] = [];
   lines.push(`Status: ${data.status}`);
   lines.push(`Progress: ${formatProgressBar(data.done, data.total)}`);
+  if (data.loopStartSnapshot) {
+    lines.push(formatRunProgress(data.done, data.loopStartSnapshot));
+  }
 
   // When STOPPED, freeze all "ago" timers at the last known timestamp
   // instead of letting them tick up from Date.now()
@@ -565,6 +598,8 @@ export async function collectMonitorData(
     // Cost tracking is best-effort
   }
 
+  const loopStartSnapshot = (await readLoopStartSnapshot(logsDir)) ?? undefined;
+
   return {
     status,
     done: counts.DONE,
@@ -577,6 +612,7 @@ export async function collectMonitorData(
     lastActivity,
     loopSpend,
     taskSpend,
+    loopStartSnapshot,
   };
 }
 
