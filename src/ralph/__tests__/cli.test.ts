@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { dispatch, formatHelp } from '../cli.js';
 
-const KNOWN_COMMANDS = ['init', 'loop', 'monitor', 'kill', 'milestones', 'shas', 'cost'] as const;
+const KNOWN_COMMANDS = [
+  'init',
+  'loop',
+  'monitor',
+  'kill',
+  'milestones',
+  'shas',
+  'cost',
+  'update',
+] as const;
 
 describe('CLI dispatch', () => {
   it('returns help action when no command is given', () => {

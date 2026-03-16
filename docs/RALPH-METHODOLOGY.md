@@ -103,3 +103,7 @@ In short: humans commit the plan, the agent commits the work.
 - **No scope creep** — if the task is done, commit
 - **All checks pass** — quality check must succeed before committing
 - **Verify early and often** — run quality check after each layer, not only at the end
+
+## Upgrading Ralph
+
+After upgrading `@mabulu-inc/ralph`, run `ralph update` to refresh methodology docs and prompt templates. This regenerates ralph-owned files while preserving user-authored content (`docs/prompts/rules.md`, `docs/PRD.md`, task files).

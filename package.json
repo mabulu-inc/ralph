@@ -1,6 +1,6 @@
 {
   "name": "@mabulu-inc/ralph",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Stateless, PRD-driven AI development loop powered by Claude Code",
   "type": "module",
   "main": "./dist/ralph/cli.js",
@@ -17,15 +17,13 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "check": "pnpm lint && pnpm format && pnpm typecheck && pnpm build && pnpm test:coverage",
-    "milestones": "bash scripts/update-milestones.sh",
-    "ralph": "npx @mabulu-inc/ralph loop",
-    "ralph:evolve": "bash scripts/ralph-evolve.sh",
-    "ralph:reinit": "bash scripts/ralph-reinit.sh",
-    "ralph:kill": "bash scripts/ralph-kill.sh",
-    "shas": "bash scripts/update-shas.sh",
-    "cost": "bash scripts/calc-cost.sh",
-    "monitor": "bash scripts/ralph-monitor.sh -w",
-    "monitor:once": "bash scripts/ralph-monitor.sh",
+    "milestones": "node dist/ralph/bin.js milestones",
+    "ralph": "node dist/ralph/bin.js loop",
+    "ralph:kill": "node dist/ralph/bin.js kill",
+    "shas": "node dist/ralph/bin.js shas",
+    "cost": "node dist/ralph/bin.js cost",
+    "monitor": "node dist/ralph/bin.js monitor -w",
+    "monitor:once": "node dist/ralph/bin.js monitor",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -37,6 +35,7 @@
       "prettier --write"
     ]
   },
+  "license": "MIT",
   "packageManager": "pnpm@10.15.1",
   "engines": {
     "node": ">=20"

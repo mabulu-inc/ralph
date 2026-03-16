@@ -112,7 +112,9 @@ Interactive project bootstrapper. Prompts for project configuration, then create
 - `docs/RALPH-METHODOLOGY.md` — full methodology reference
 - `docs/tasks/T-000.md` — infrastructure bootstrap task
 - `docs/prompts/boot.md` — the default boot prompt template (see §5)
+- `docs/prompts/system.md` — stable system-level prompt layer (see §5.7)
 - `docs/prompts/rules.md` — user-editable project-specific rules included in the boot prompt (see §5.9)
+- `docs/prompts/README.md` — explains the prompt directory structure
 - `ralph.config.json` — project configuration including agent selection
 - Agent instructions file (e.g., `.claude/CLAUDE.md`, `GEMINI.md`, `AGENTS.md`) — minimal stub with project goal and methodology pointer (no config duplication)
 
@@ -272,6 +274,31 @@ Calculate and display token usage and estimated cost from ralph log files.
 - `ralph cost --update-tasks` — write cost into each DONE task file
 
 **Output:** tabular display with columns: Input tokens, Cache Write, Cache Read, Output tokens, Cost.
+
+### 3.8 `ralph update`
+
+Refresh ralph-owned files after upgrading the package. Regenerates methodology docs and prompt templates without touching user-authored content.
+
+**Updates:**
+
+- `docs/RALPH-METHODOLOGY.md` — full methodology reference
+- `docs/prompts/boot.md` — default boot prompt template
+- `docs/prompts/system.md` — stable system-level prompt layer
+- `docs/prompts/README.md` — prompt directory documentation
+- Agent instructions file (e.g., `.claude/CLAUDE.md`) — regenerated from `ralph.config.json`
+
+**Preserves:**
+
+- `docs/prompts/rules.md` — user-authored, never overwritten
+- `docs/PRD.md` — user-authored
+- `docs/tasks/*` — user-authored
+- `ralph.config.json` — user-authored (read as input, not modified)
+
+**Behavior:**
+
+- Reads `ralph.config.json` for project configuration (errors if missing)
+- Compares generated content against existing files; only writes if changed
+- Reports which files were updated and which were already up to date
 
 ## 4. Log Files
 
