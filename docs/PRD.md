@@ -276,7 +276,25 @@ Calculate and display token usage and estimated cost from ralph log files.
 
 **Output:** tabular display with columns: Input tokens, Cache Write, Cache Read, Output tokens, Cost.
 
-### 3.8 `ralph update`
+### 3.8 `ralph retry`
+
+Reset one or more BLOCKED tasks so they can be retried from scratch. Logs are preserved but moved out of the retry-count path.
+
+**Usage:**
+
+```
+ralph retry T-005 [T-006 ...]
+```
+
+**Behavior:**
+
+- Only BLOCKED tasks are eligible — error on TODO or DONE tasks
+- Set `Status` back to `TODO`, remove `Blocked reason` field
+- Move all `.ralph-logs/T-NNN-*.jsonl` files into `.ralph-logs/T-NNN-resets/` (the archive folder accumulates across multiple resets)
+- If the task is already TODO with no logs, no-op with a message
+- Supports multiple task IDs in a single invocation
+
+### 3.9 `ralph update`
 
 Refresh ralph-owned files after upgrading the package. Regenerates methodology docs and prompt templates without touching user-authored content.
 

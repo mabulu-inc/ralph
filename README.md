@@ -46,6 +46,7 @@ npx @mabulu-inc/ralph loop
 | `milestones` | Generate milestone summaries with cost breakdowns        |
 | `shas`       | Backfill commit SHAs into task metadata                  |
 | `cost`       | Calculate token usage and costs from log files           |
+| `retry`      | Reset blocked tasks so they can be retried from scratch  |
 | `update`     | Refresh methodology and prompt templates after upgrade   |
 
 ## Documentation
