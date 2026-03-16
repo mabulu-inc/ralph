@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, rm, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -279,11 +279,28 @@ describe('findLatestLogFile', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('returns the most recent log file', async () => {
+  it('returns the most recently modified log file', async () => {
     await writeFile(join(dir, 'T-001-20260310-100000.jsonl'), '');
     await writeFile(join(dir, 'T-002-20260310-120000.jsonl'), '');
+    // Make T-001 file newer by mtime
+    const future = new Date(Date.now() + 10_000);
+    await utimes(join(dir, 'T-001-20260310-100000.jsonl'), future, future);
     const result = await findLatestLogFile(dir);
-    expect(result).toBe('T-002-20260310-120000.jsonl');
+    expect(result).toBe('T-001-20260310-100000.jsonl');
+  });
+
+  it('picks the active log when task IDs are non-sequential', async () => {
+    // T-088 was processed first, then T-069 — T-069 is active (newer mtime)
+    await writeFile(join(dir, 'T-088-20260310-100000.jsonl'), '');
+    const older = new Date(Date.now() - 60_000);
+    await utimes(join(dir, 'T-088-20260310-100000.jsonl'), older, older);
+
+    await writeFile(join(dir, 'T-069-20260310-110000.jsonl'), '');
+    // T-069 file is created after, so it has a newer mtime by default
+
+    const result = await findLatestLogFile(dir);
+    // Should pick T-069 (newer mtime), NOT T-088 (alphabetically last)
+    expect(result).toBe('T-069-20260310-110000.jsonl');
   });
 
   it('returns null when no log files exist', async () => {

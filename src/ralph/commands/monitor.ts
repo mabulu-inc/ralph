@@ -157,8 +157,17 @@ export function detectStatus(ralphPids: number[]): 'RUNNING' | 'STOPPED' {
 export async function findLatestLogFile(logsDir: string): Promise<string | null> {
   try {
     const entries = await readdir(logsDir);
-    const logFiles = entries.filter((f) => f.endsWith('.jsonl')).sort();
-    return logFiles.length > 0 ? logFiles[logFiles.length - 1] : null;
+    const logFiles = entries.filter((f) => f.endsWith('.jsonl'));
+    if (logFiles.length === 0) return null;
+
+    const withMtime = await Promise.all(
+      logFiles.map(async (f) => {
+        const s = await stat(join(logsDir, f));
+        return { name: f, mtime: s.mtimeMs };
+      }),
+    );
+    withMtime.sort((a, b) => b.mtime - a.mtime);
+    return withMtime[0].name;
   } catch {
     return null;
   }
