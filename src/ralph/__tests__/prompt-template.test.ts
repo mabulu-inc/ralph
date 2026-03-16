@@ -205,6 +205,27 @@ describe('interpolateTemplate', () => {
     const result = interpolateTemplate(template, mockTask, mockConfig);
     expect(result).toBe('Retry: []');
   });
+
+  it('replaces {{preflightBaseline}} with provided baseline', () => {
+    const template = 'Baseline:\n{{preflightBaseline}}';
+    const result = interpolateTemplate(
+      template,
+      mockTask,
+      mockConfig,
+      '',
+      '',
+      '',
+      '',
+      '# Pre-existing failures\nDo not fix these.',
+    );
+    expect(result).toBe('Baseline:\n# Pre-existing failures\nDo not fix these.');
+  });
+
+  it('replaces {{preflightBaseline}} with empty string when not provided', () => {
+    const template = 'Baseline: [{{preflightBaseline}}]';
+    const result = interpolateTemplate(template, mockTask, mockConfig);
+    expect(result).toBe('Baseline: []');
+  });
 });
 
 describe('loadAndInterpolate', () => {

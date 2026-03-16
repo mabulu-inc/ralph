@@ -13,6 +13,7 @@ export function interpolateTemplate(
   prdContent = '',
   codebaseIndex = '',
   retryContext = '',
+  preflightBaseline = '',
 ): string {
   const vars: Record<string, string> = {
     'task.id': task.id,
@@ -32,6 +33,7 @@ export function interpolateTemplate(
     'project.rules': projectRules,
     codebaseIndex,
     retryContext,
+    preflightBaseline,
   };
 
   return template.replace(/\{\{(\w+(?:\.\w+)?)\}\}/g, (match, key: string) => {
@@ -44,6 +46,7 @@ export async function loadAndInterpolate(
   task: Task,
   config: ProjectConfig,
   retryContext = '',
+  preflightBaseline = '',
 ): Promise<string> {
   const templatePath = join(projectDir, 'docs', 'prompts', 'boot.md');
   let template: string;
@@ -85,6 +88,7 @@ export async function loadAndInterpolate(
     prdContent,
     codebaseIndex,
     retryContext,
+    preflightBaseline,
   );
 }
 
@@ -98,6 +102,7 @@ export async function loadLayeredPrompt(
   task: Task,
   config: ProjectConfig,
   retryContext = '',
+  preflightBaseline = '',
 ): Promise<LayeredPrompt> {
   const systemPath = join(projectDir, 'docs', 'prompts', 'system.md');
   let systemPrompt: string | undefined;
@@ -107,7 +112,13 @@ export async function loadLayeredPrompt(
     // system.md doesn't exist — fallback to single-prompt mode
   }
 
-  const userPrompt = await loadAndInterpolate(projectDir, task, config, retryContext);
+  const userPrompt = await loadAndInterpolate(
+    projectDir,
+    task,
+    config,
+    retryContext,
+    preflightBaseline,
+  );
 
   if (systemPrompt) {
     return { systemPrompt, userPrompt };

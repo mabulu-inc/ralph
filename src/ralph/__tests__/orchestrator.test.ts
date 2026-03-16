@@ -13,6 +13,12 @@ vi.mock('../core/jsonl-result.js', () => ({
   parseSessionResult: vi.fn(),
 }));
 
+vi.mock('../core/preflight.js', () => ({
+  runPreflightCheck: vi.fn(),
+  formatPreflightBaseline: vi.fn(),
+  buildPreflightLogEntry: vi.fn(),
+}));
+
 vi.mock('../core/pid-file.js', () => ({
   writePidFile: vi.fn(),
   removePidFile: vi.fn(),
@@ -43,6 +49,7 @@ vi.mock('../commands/milestones.js', () => ({
 
 import * as processModule from '../core/process.js';
 import * as jsonlModule from '../core/jsonl-result.js';
+import * as preflightModule from '../core/preflight.js';
 import * as gitModule from '../core/git.js';
 import * as shasModule from '../commands/shas.js';
 import * as costModule from '../commands/cost.js';
@@ -55,6 +62,9 @@ import { resetProviderInit } from '../providers/index.js';
 const spawnWithCapture = vi.mocked(processModule.spawnWithCapture);
 const monitorProcess = vi.mocked(processModule.monitorProcess);
 const parseSessionResult = vi.mocked(jsonlModule.parseSessionResult);
+const runPreflightCheck = vi.mocked(preflightModule.runPreflightCheck);
+const formatPreflightBaseline = vi.mocked(preflightModule.formatPreflightBaseline);
+const buildPreflightLogEntry = vi.mocked(preflightModule.buildPreflightLogEntry);
 const discardUnstaged = vi.mocked(gitModule.discardUnstaged);
 const getHeadSha = vi.mocked(gitModule.getHeadSha);
 const hasUnpushedCommits = vi.mocked(gitModule.hasUnpushedCommits);
@@ -108,6 +118,9 @@ describe('LoopOrchestrator', () => {
     costRun.mockResolvedValue(undefined);
     milestonesRun.mockResolvedValue(undefined);
     parseSessionResult.mockResolvedValue(undefined);
+    runPreflightCheck.mockResolvedValue({ passed: true, output: '', timedOut: false });
+    formatPreflightBaseline.mockReturnValue('');
+    buildPreflightLogEntry.mockReturnValue('{"type":"preflight"}');
   });
 
   afterEach(async () => {
@@ -804,6 +817,114 @@ describe('LoopOrchestrator', () => {
     const t001Content = await rf(join(tmpDir, 'docs', 'tasks', 'T-001.md'), 'utf-8');
     expect(t001Content).toContain('**Status**: TODO');
     expect(t001Content).not.toContain('BLOCKED');
+  });
+
+  it('runs preflight check once before the loop starts', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 2 }));
+    // Make second iteration find all tasks done
+    monitorProcess
+      .mockResolvedValueOnce({ exitCode: 0, timedOut: false })
+      .mockResolvedValueOnce({ exitCode: 0, timedOut: false });
+
+    await orchestrator.execute();
+
+    // Preflight should only be called once, not per-iteration
+    expect(runPreflightCheck).toHaveBeenCalledTimes(1);
+    expect(runPreflightCheck).toHaveBeenCalledWith(
+      'pnpm check',
+      expect.objectContaining({ cwd: tmpDir }),
+    );
+  });
+
+  it('logs preflight result to preflight.jsonl', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    buildPreflightLogEntry.mockReturnValue('{"type":"preflight","passed":true}');
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const { readFile: rf } = await import('node:fs/promises');
+    const logContent = await rf(join(tmpDir, '.ralph-logs', 'preflight.jsonl'), 'utf-8');
+    expect(logContent).toContain('preflight');
+  });
+
+  it('injects preflight baseline into prompt when preflight fails', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}\n{{preflightBaseline}}\n{{retryContext}}',
+    );
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    runPreflightCheck.mockResolvedValue({
+      passed: false,
+      output: 'Error: lint failed',
+      timedOut: false,
+    });
+    formatPreflightBaseline.mockReturnValue(
+      '# Pre-existing failures\nDo not fix these.\n```\nError: lint failed\n```',
+    );
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const calledArgs = spawnWithCapture.mock.calls[0][1] as string[];
+    const allArgs = calledArgs.join(' ');
+    expect(allArgs).toContain('Pre-existing failures');
+  });
+
+  it('does not inject baseline when preflight passes', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}\n[{{preflightBaseline}}]\n{{retryContext}}',
+    );
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    runPreflightCheck.mockResolvedValue({ passed: true, output: 'ok', timedOut: false });
+    formatPreflightBaseline.mockReturnValue('');
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const calledArgs = spawnWithCapture.mock.calls[0][1] as string[];
+    const allArgs = calledArgs.join(' ');
+    expect(allArgs).not.toContain('Pre-existing failures');
+  });
+
+  it('logs warning and proceeds when preflight times out', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    runPreflightCheck.mockResolvedValue({ passed: false, output: '', timedOut: true });
+    formatPreflightBaseline.mockReturnValue('');
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('Preflight: timed out');
+    // Should still spawn the agent
+    expect(spawnWithCapture).toHaveBeenCalled();
   });
 
   it('injects retry context on timeout failure', async () => {

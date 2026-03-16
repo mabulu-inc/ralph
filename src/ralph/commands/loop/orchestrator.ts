@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { scanTasks, findNextTask, allDone, countByStatus } from '../../core/tasks.js';
 import { readConfig } from '../../core/config.js';
@@ -8,6 +8,11 @@ import { spawnWithCapture, monitorProcess } from '../../core/process.js';
 import { writePidFile, removePidFile } from '../../core/pid-file.js';
 import { loadLayeredPrompt } from '../../core/prompt-template.js';
 import { buildRetryContext } from '../../core/retry-context.js';
+import {
+  runPreflightCheck,
+  formatPreflightBaseline,
+  buildPreflightLogEntry,
+} from '../../core/preflight.js';
 import { updateField } from '../../core/markdown.js';
 import { parseSessionResult } from '../../core/jsonl-result.js';
 import { run as runShas } from '../shas.js';
@@ -40,14 +45,38 @@ export class LoopOrchestrator {
     await mkdir(this.logsDir, { recursive: true });
     await writePidFile(pidPath, process.pid);
 
+    let preflightBaseline = '';
     try {
-      await this.executeLoop(config);
+      const preflightResult = await runPreflightCheck(config.qualityCheck, {
+        cwd: this.projectDir,
+      });
+      const logEntry = buildPreflightLogEntry(preflightResult);
+      await appendFile(join(this.logsDir, 'preflight.jsonl'), logEntry + '\n');
+
+      if (preflightResult.timedOut) {
+        console.log('Preflight: timed out — proceeding without baseline');
+      } else if (preflightResult.passed) {
+        console.log('Preflight: passed clean');
+      } else {
+        console.log('Preflight: pre-existing failures detected');
+        preflightBaseline = formatPreflightBaseline(preflightResult);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Preflight: failed to run — ${msg}`);
+    }
+
+    try {
+      await this.executeLoop(config, preflightBaseline);
     } finally {
       await removePidFile(pidPath);
     }
   }
 
-  private async executeLoop(config: Awaited<ReturnType<typeof readConfig>>): Promise<void> {
+  private async executeLoop(
+    config: Awaited<ReturnType<typeof readConfig>>,
+    preflightBaseline = '',
+  ): Promise<void> {
     let lastFailedTaskId: string | undefined;
 
     for (
@@ -111,7 +140,13 @@ export class LoopOrchestrator {
         retryContext = await buildRetryContext(this.logsDir, nextTask.id);
       }
 
-      const layered = await loadLayeredPrompt(this.projectDir, nextTask, config, retryContext);
+      const layered = await loadLayeredPrompt(
+        this.projectDir,
+        nextTask,
+        config,
+        retryContext,
+        preflightBaseline,
+      );
 
       let prompt: string;
       let systemPromptForArgs: string | undefined;
