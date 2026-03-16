@@ -27,6 +27,7 @@ const mockTask: Task = {
   producesCount: 2,
   touches: ['src/core/foo.ts', 'src/core/bar.ts'],
   hints: 'Follow the existing pattern in core/tasks.ts.',
+  complexity: undefined,
 };
 
 const mockConfig: ProjectConfig = {

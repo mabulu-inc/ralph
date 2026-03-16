@@ -8,6 +8,7 @@ import {
   countListItemsInSection,
   extractSectionFirstParagraph,
 } from './markdown.js';
+import type { ComplexityTier } from './complexity.js';
 
 export interface Task {
   id: string;
@@ -22,6 +23,7 @@ export interface Task {
   completed: string | undefined;
   commit: string | undefined;
   cost: string | undefined;
+  complexity: ComplexityTier | undefined;
   blocked: boolean;
   description: string;
   producesCount: number;
@@ -33,6 +35,14 @@ function parseTouches(raw: string | undefined): string[] {
     .split(',')
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
+}
+
+const VALID_COMPLEXITY_TIERS = new Set<string>(['light', 'standard', 'heavy']);
+
+function parseComplexity(raw: string | undefined): ComplexityTier | undefined {
+  if (!raw) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  return VALID_COMPLEXITY_TIERS.has(normalized) ? (normalized as ComplexityTier) : undefined;
 }
 
 function parseDeps(raw: string | undefined): string[] {
@@ -62,6 +72,8 @@ export function parseTaskFile(filename: string, content: string): Task {
   const hints = extractSectionFirstParagraph(tree, 'Hints');
   const description = extractSectionFirstParagraph(tree, 'Description');
   const producesCount = countListItemsInSection(tree, 'Produces');
+  const complexityRaw = extractFieldFromAst(tree, 'Complexity');
+  const complexity = parseComplexity(complexityRaw);
 
   return {
     id,
@@ -76,6 +88,7 @@ export function parseTaskFile(filename: string, content: string): Task {
     completed,
     commit,
     cost,
+    complexity,
     blocked,
     description,
     producesCount,

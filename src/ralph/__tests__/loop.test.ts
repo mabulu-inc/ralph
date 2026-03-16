@@ -147,45 +147,63 @@ describe('scaleForComplexity', () => {
       producesCount: 1,
       touches: [],
       hints: '',
+      complexity: undefined,
       ...overrides,
     };
   }
 
   it('returns light tier defaults for simple tasks', () => {
     const result = scaleForComplexity(taskWith({}));
-    expect(result).toEqual({ tier: 'light', maxTurns: 50, timeout: 600 });
+    expect(result).toEqual({ tier: 'light', maxTurns: 50, timeout: 600, source: 'heuristic' });
   });
 
   it('uses overridden tier scaling from env vars', () => {
     process.env.RALPH_TIER_LIGHT_MAX_TURNS = '30';
     process.env.RALPH_TIER_LIGHT_TIMEOUT = '400';
     const result = scaleForComplexity(taskWith({}));
-    expect(result).toEqual({ tier: 'light', maxTurns: 30, timeout: 400 });
+    expect(result).toEqual({ tier: 'light', maxTurns: 30, timeout: 400, source: 'heuristic' });
   });
 
   it('returns standard tier for tasks with 2-3 deps', () => {
     const result = scaleForComplexity(taskWith({ depends: ['T-001', 'T-002'] }));
-    expect(result).toEqual({ tier: 'standard', maxTurns: 75, timeout: 900 });
+    expect(result).toEqual({ tier: 'standard', maxTurns: 75, timeout: 900, source: 'heuristic' });
   });
 
   it('returns heavy tier for tasks with 4+ deps', () => {
     const result = scaleForComplexity(taskWith({ depends: ['T-001', 'T-002', 'T-003', 'T-004'] }));
-    expect(result).toEqual({ tier: 'heavy', maxTurns: 125, timeout: 1200 });
+    expect(result).toEqual({ tier: 'heavy', maxTurns: 125, timeout: 1200, source: 'heuristic' });
   });
 
   it('returns heavy tier for integration keyword in title', () => {
     const result = scaleForComplexity(taskWith({ title: 'End-to-end integration tests' }));
-    expect(result).toEqual({ tier: 'heavy', maxTurns: 125, timeout: 1200 });
+    expect(result).toEqual({ tier: 'heavy', maxTurns: 125, timeout: 1200, source: 'heuristic' });
   });
 
   it('returns standard tier for 3-4 produces', () => {
     const result = scaleForComplexity(taskWith({ producesCount: 3 }));
-    expect(result).toEqual({ tier: 'standard', maxTurns: 75, timeout: 900 });
+    expect(result).toEqual({ tier: 'standard', maxTurns: 75, timeout: 900, source: 'heuristic' });
   });
 
   it('returns heavy tier for 5+ produces', () => {
     const result = scaleForComplexity(taskWith({ producesCount: 5 }));
-    expect(result).toEqual({ tier: 'heavy', maxTurns: 125, timeout: 1200 });
+    expect(result).toEqual({ tier: 'heavy', maxTurns: 125, timeout: 1200, source: 'heuristic' });
+  });
+
+  it('uses explicit complexity from task file when present', () => {
+    const result = scaleForComplexity(taskWith({ complexity: 'heavy' }));
+    expect(result).toEqual({ tier: 'heavy', maxTurns: 125, timeout: 1200, source: 'task-file' });
+  });
+
+  it('uses explicit light complexity even when heuristic would say heavy', () => {
+    const result = scaleForComplexity(
+      taskWith({ complexity: 'light', depends: ['T-001', 'T-002', 'T-003', 'T-004'] }),
+    );
+    expect(result).toEqual({ tier: 'light', maxTurns: 50, timeout: 600, source: 'task-file' });
+  });
+
+  it('falls back to heuristic when complexity is undefined', () => {
+    const result = scaleForComplexity(taskWith({ complexity: undefined }));
+    expect(result).toEqual({ tier: 'light', maxTurns: 50, timeout: 600, source: 'heuristic' });
   });
 });
 

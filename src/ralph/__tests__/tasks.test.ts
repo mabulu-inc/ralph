@@ -162,6 +162,40 @@ A task that specifies which files it touches.
 - \`src/core/tasks.ts\`
 `;
 
+const TASK_WITH_COMPLEXITY = `# T-070: Heavy task with explicit complexity
+
+- **Status**: TODO
+- **Milestone**: 1 — Infra
+- **Depends**: none
+- **PRD Reference**: §1
+- **Complexity**: heavy
+
+## Description
+
+A task with explicit complexity.
+
+## Produces
+
+- \`src/heavy.ts\`
+`;
+
+const TASK_WITH_INVALID_COMPLEXITY = `# T-071: Task with invalid complexity
+
+- **Status**: TODO
+- **Milestone**: 1 — Infra
+- **Depends**: none
+- **PRD Reference**: §1
+- **Complexity**: extreme
+
+## Description
+
+A task with an invalid complexity value.
+
+## Produces
+
+- \`src/invalid.ts\`
+`;
+
 const MINIMAL_TASK = `# T-010: Minimal
 
 - **Status**: TODO
@@ -195,6 +229,7 @@ describe('parseTaskFile', () => {
       producesCount: 1,
       touches: [],
       hints: '',
+      complexity: undefined,
     });
   });
 
@@ -216,6 +251,7 @@ describe('parseTaskFile', () => {
       producesCount: 1,
       touches: [],
       hints: '',
+      complexity: undefined,
     });
   });
 
@@ -408,6 +444,40 @@ Single touch file.
     const task = parseTaskFile('T-063.md', TASK_WITH_TOUCHES_AND_HINTS);
     expect(task.touches).toEqual(['src/core/tasks.ts', 'src/core/config.ts']);
     expect(task.hints).toBe('Use extractSectionFirstParagraph for parsing.');
+  });
+
+  it('parses explicit complexity field', () => {
+    const task = parseTaskFile('T-070.md', TASK_WITH_COMPLEXITY);
+    expect(task.complexity).toBe('heavy');
+  });
+
+  it('sets complexity to undefined for invalid values', () => {
+    const task = parseTaskFile('T-071.md', TASK_WITH_INVALID_COMPLEXITY);
+    expect(task.complexity).toBeUndefined();
+  });
+
+  it('sets complexity to undefined when field is absent', () => {
+    const task = parseTaskFile('T-010.md', MINIMAL_TASK);
+    expect(task.complexity).toBeUndefined();
+  });
+
+  it('parses all valid complexity tiers', () => {
+    for (const tier of ['light', 'standard', 'heavy']) {
+      const content = `# T-072: Complexity ${tier}
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+- **Complexity**: ${tier}
+
+## Description
+
+Test task.
+`;
+      const task = parseTaskFile('T-072.md', content);
+      expect(task.complexity).toBe(tier);
+    }
   });
 
   it('parses fields with mixed bold styles (underscore bold)', () => {

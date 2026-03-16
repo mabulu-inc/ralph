@@ -77,7 +77,7 @@ export class LoopOrchestrator {
       console.log(`[Iteration ${iteration}] Starting ${nextTask.id}: ${nextTask.title}`);
       console.log(`  Progress: ${counts.DONE}/${counts.DONE + counts.TODO} tasks done`);
       console.log(
-        `  Complexity: ${scaling.tier} (${effectiveMaxTurns} turns, ${effectiveTimeout}s timeout)`,
+        `  Complexity: ${scaling.tier} [${scaling.source}] (${effectiveMaxTurns} turns, ${effectiveTimeout}s timeout)`,
       );
 
       const discardError = await this.gitService.discardUnstaged();

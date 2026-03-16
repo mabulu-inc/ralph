@@ -25,16 +25,22 @@ export interface PreflightResult {
   errors: string[];
 }
 
+export type ComplexitySource = 'task-file' | 'heuristic';
+
 export interface ScalingResult {
   tier: ComplexityTier;
   maxTurns: number;
   timeout: number;
+  source: ComplexitySource;
 }
 
 export function scaleForComplexity(task: Task): ScalingResult {
-  const tier = computeTaskComplexity(task);
   const tierScaling = getTierScaling();
-  return { tier, ...tierScaling[tier] };
+  if (task.complexity) {
+    return { tier: task.complexity, ...tierScaling[task.complexity], source: 'task-file' };
+  }
+  const tier = computeTaskComplexity(task);
+  return { tier, ...tierScaling[tier], source: 'heuristic' };
 }
 
 export function parseLoopOptions(args: string[]): LoopOptions {
@@ -165,7 +171,12 @@ export async function run(args: string[], cwd?: string): Promise<void> {
     const nextTask = findNextTask(tasks);
     const scaling = nextTask
       ? scaleForComplexity(nextTask)
-      : { tier: 'light' as ComplexityTier, maxTurns: 50, timeout: 600 };
+      : {
+          tier: 'light' as ComplexityTier,
+          maxTurns: 50,
+          timeout: 600,
+          source: 'heuristic' as const,
+        };
     console.log(formatDryRunConfig(opts, config, scaling));
     return;
   }
