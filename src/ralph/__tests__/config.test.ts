@@ -82,6 +82,8 @@ describe('parseConfig', () => {
       agent: undefined,
       model: undefined,
       maxRetries: 3,
+      maxCostPerTask: 10,
+      maxLoopBudget: 100,
     });
   });
 
@@ -98,6 +100,8 @@ describe('parseConfig', () => {
       agent: undefined,
       model: undefined,
       maxRetries: 3,
+      maxCostPerTask: 10,
+      maxLoopBudget: 100,
     });
   });
 
@@ -365,6 +369,100 @@ describe('readConfig', () => {
     try {
       const config = await readConfig(dir);
       expect(config.maxRetries).toBe(3);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads maxCostPerTask from ralph.config.json', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+
+    const dir = await mkdtemp(join(tmpdir(), 'ralph-config-'));
+    const configData = {
+      language: 'TypeScript',
+      packageManager: 'pnpm',
+      testingFramework: 'Vitest',
+      qualityCheck: 'pnpm check',
+      testCommand: 'pnpm test',
+      maxCostPerTask: 5,
+    };
+    await writeFile(join(dir, 'ralph.config.json'), JSON.stringify(configData));
+
+    try {
+      const config = await readConfig(dir);
+      expect(config.maxCostPerTask).toBe(5);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads maxLoopBudget from ralph.config.json', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+
+    const dir = await mkdtemp(join(tmpdir(), 'ralph-config-'));
+    const configData = {
+      language: 'TypeScript',
+      packageManager: 'pnpm',
+      testingFramework: 'Vitest',
+      qualityCheck: 'pnpm check',
+      testCommand: 'pnpm test',
+      maxLoopBudget: 50,
+    };
+    await writeFile(join(dir, 'ralph.config.json'), JSON.stringify(configData));
+
+    try {
+      const config = await readConfig(dir);
+      expect(config.maxLoopBudget).toBe(50);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('defaults maxCostPerTask to 10 when not set', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+
+    const dir = await mkdtemp(join(tmpdir(), 'ralph-config-'));
+    const configData = {
+      language: 'TypeScript',
+      packageManager: 'pnpm',
+      testingFramework: 'Vitest',
+      qualityCheck: 'pnpm check',
+      testCommand: 'pnpm test',
+    };
+    await writeFile(join(dir, 'ralph.config.json'), JSON.stringify(configData));
+
+    try {
+      const config = await readConfig(dir);
+      expect(config.maxCostPerTask).toBe(10);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('defaults maxLoopBudget to 100 when not set', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+
+    const dir = await mkdtemp(join(tmpdir(), 'ralph-config-'));
+    const configData = {
+      language: 'TypeScript',
+      packageManager: 'pnpm',
+      testingFramework: 'Vitest',
+      qualityCheck: 'pnpm check',
+      testCommand: 'pnpm test',
+    };
+    await writeFile(join(dir, 'ralph.config.json'), JSON.stringify(configData));
+
+    try {
+      const config = await readConfig(dir);
+      expect(config.maxLoopBudget).toBe(100);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

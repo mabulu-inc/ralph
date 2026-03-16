@@ -14,6 +14,8 @@ export interface ProjectConfig {
   agent: string | undefined;
   model: string | undefined;
   maxRetries: number;
+  maxCostPerTask: number;
+  maxLoopBudget: number;
 }
 
 function parseConfigSection(content: string): Root {
@@ -53,6 +55,8 @@ export function parseConfig(content: string): ProjectConfig {
     agent: undefined,
     model: undefined,
     maxRetries: 3,
+    maxCostPerTask: 10,
+    maxLoopBudget: 100,
   };
 }
 
@@ -67,6 +71,8 @@ interface RalphConfigJsonData {
   fileNaming?: string;
   database?: string;
   maxRetries?: number;
+  maxCostPerTask?: number;
+  maxLoopBudget?: number;
 }
 
 const REQUIRED_JSON_FIELDS: (keyof RalphConfigJsonData)[] = [
@@ -98,6 +104,8 @@ function parseConfigJson(raw: string): ProjectConfig {
     agent: typed.agent ?? undefined,
     model: typed.model ?? undefined,
     maxRetries: typeof typed.maxRetries === 'number' ? typed.maxRetries : 3,
+    maxCostPerTask: typeof typed.maxCostPerTask === 'number' ? typed.maxCostPerTask : 10,
+    maxLoopBudget: typeof typed.maxLoopBudget === 'number' ? typed.maxLoopBudget : 100,
   };
 }
 

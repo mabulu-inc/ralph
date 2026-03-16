@@ -971,6 +971,122 @@ describe('LoopOrchestrator', () => {
     expect(spawnWithCapture).toHaveBeenCalled();
   });
 
+  it('marks task BLOCKED when cumulative cost exceeds maxCostPerTask', async () => {
+    resetRegistry();
+    resetProviderInit();
+
+    await mkdir(join(tmpDir, 'docs', 'tasks'), { recursive: true });
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'ralph.config.json'),
+      JSON.stringify({
+        language: 'TypeScript',
+        packageManager: 'pnpm',
+        testingFramework: 'Vitest',
+        qualityCheck: 'pnpm check',
+        testCommand: 'pnpm test',
+        maxCostPerTask: 0.01,
+      }),
+    );
+    await writeFile(join(tmpDir, 'docs', 'tasks', 'T-001.md'), TODO_TASK);
+    await writeFile(
+      join(tmpDir, 'docs', 'tasks', 'T-002.md'),
+      `# T-002: Second task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nAnother task.\n`,
+    );
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}: {{task.title}}\nConfig: {{config.language}}\n{{retryContext}}',
+    );
+
+    // Create a log file with high cost usage for T-001
+    const logsDir = join(tmpDir, '.ralph-logs');
+    await mkdir(logsDir, { recursive: true });
+    const expensiveLog = JSON.stringify({
+      type: 'result',
+      usage: {
+        input_tokens: 1_000_000,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        output_tokens: 1_000_000,
+      },
+    });
+    await writeFile(join(logsDir, 'T-001-20250101-120000.jsonl'), expensiveLog);
+
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 1 }));
+    await orchestrator.execute();
+
+    // T-001 should be BLOCKED due to cost
+    const { readFile: rf } = await import('node:fs/promises');
+    const t001Content = await rf(join(tmpDir, 'docs', 'tasks', 'T-001.md'), 'utf-8');
+    expect(t001Content).toContain('**Status**: BLOCKED');
+    expect(t001Content).toContain('cost limit exceeded');
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('BLOCKED');
+    expect(output).toContain('cost');
+  });
+
+  it('stops the loop when total spend exceeds maxLoopBudget', async () => {
+    resetRegistry();
+    resetProviderInit();
+
+    await mkdir(join(tmpDir, 'docs', 'tasks'), { recursive: true });
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'ralph.config.json'),
+      JSON.stringify({
+        language: 'TypeScript',
+        packageManager: 'pnpm',
+        testingFramework: 'Vitest',
+        qualityCheck: 'pnpm check',
+        testCommand: 'pnpm test',
+        maxLoopBudget: 0.01,
+      }),
+    );
+    await writeFile(join(tmpDir, 'docs', 'tasks', 'T-001.md'), TODO_TASK);
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}: {{task.title}}\nConfig: {{config.language}}\n{{retryContext}}',
+    );
+
+    // Simulate a completed expensive iteration by writing a log file with cost in the log
+    const logsDir = join(tmpDir, '.ralph-logs');
+    await mkdir(logsDir, { recursive: true });
+
+    mockChildProcess();
+    // First iteration succeeds but after it completes, cost tracking will find the expensive log
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    // Override spawnWithCapture to write an expensive log file
+    spawnWithCapture.mockImplementation((_cmd, _args, opts) => {
+      const logFile = (opts as { logFile?: string }).logFile;
+      if (logFile) {
+        const expensiveLog = JSON.stringify({
+          type: 'result',
+          usage: {
+            input_tokens: 1_000_000,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
+            output_tokens: 1_000_000,
+          },
+        });
+        writeFileSync(logFile, expensiveLog + '\n');
+      }
+      return { pid: 12345, stdout: null, stderr: null } as unknown as ReturnType<
+        typeof processModule.spawnWithCapture
+      >;
+    });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 5 }));
+    await orchestrator.execute();
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('loop budget exceeded');
+  });
+
   it('injects retry context on timeout failure', async () => {
     resetRegistry();
     resetProviderInit();

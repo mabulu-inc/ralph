@@ -11,6 +11,8 @@ export interface RalphConfigJson {
   fileNaming?: string;
   database?: string;
   maxRetries?: number;
+  maxCostPerTask?: number;
+  maxLoopBudget?: number;
 }
 
 export function generateRalphConfigJson(
@@ -18,6 +20,8 @@ export function generateRalphConfigJson(
   agent: string,
   model?: string,
   maxRetries?: number,
+  maxCostPerTask?: number,
+  maxLoopBudget?: number,
 ): string {
   const obj: RalphConfigJson = {
     language: config.language,
@@ -42,6 +46,14 @@ export function generateRalphConfigJson(
 
   if (maxRetries !== undefined && maxRetries !== 3) {
     obj.maxRetries = maxRetries;
+  }
+
+  if (maxCostPerTask !== undefined && maxCostPerTask !== 10) {
+    obj.maxCostPerTask = maxCostPerTask;
+  }
+
+  if (maxLoopBudget !== undefined && maxLoopBudget !== 100) {
+    obj.maxLoopBudget = maxLoopBudget;
   }
 
   return JSON.stringify(obj, null, 2) + '\n';

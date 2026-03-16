@@ -28,6 +28,8 @@ export interface InitAnswers {
   agent?: string;
   model?: string;
   maxRetries?: number;
+  maxCostPerTask?: number;
+  maxLoopBudget?: number;
 }
 
 export type OnConflict = (relativePath: string) => Promise<boolean>;
@@ -174,6 +176,12 @@ export async function loadExistingDefaults(rootDir: string): Promise<Partial<Ini
     if (typeof config['maxRetries'] === 'number') {
       defaults.maxRetries = config['maxRetries'] as number;
     }
+    if (typeof config['maxCostPerTask'] === 'number') {
+      defaults.maxCostPerTask = config['maxCostPerTask'] as number;
+    }
+    if (typeof config['maxLoopBudget'] === 'number') {
+      defaults.maxLoopBudget = config['maxLoopBudget'] as number;
+    }
   } catch {
     // No ralph.config.json
   }
@@ -242,7 +250,14 @@ export async function runInit(
     await writeFile(
       rootDir,
       'ralph.config.json',
-      generateRalphConfigJson(config, answers.agent ?? 'claude', answers.model, answers.maxRetries),
+      generateRalphConfigJson(
+        config,
+        answers.agent ?? 'claude',
+        answers.model,
+        answers.maxRetries,
+        answers.maxCostPerTask,
+        answers.maxLoopBudget,
+      ),
       onConflict,
       result,
     );
@@ -331,6 +346,18 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
       String(defaults.maxRetries ?? 3),
     );
     const maxRetries = parseInt(maxRetriesStr, 10) || 3;
+    const maxCostPerTaskStr = await prompt(
+      rl,
+      'Max cost per task in USD',
+      String(defaults.maxCostPerTask ?? 10),
+    );
+    const maxCostPerTask = parseFloat(maxCostPerTaskStr) || 10;
+    const maxLoopBudgetStr = await prompt(
+      rl,
+      'Max loop budget in USD',
+      String(defaults.maxLoopBudget ?? 100),
+    );
+    const maxLoopBudget = parseFloat(maxLoopBudgetStr) || 100;
 
     return {
       projectName,
@@ -344,6 +371,8 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
       agent: agent || 'claude',
       model: model || undefined,
       maxRetries,
+      maxCostPerTask,
+      maxLoopBudget,
     };
   } finally {
     rl.close();

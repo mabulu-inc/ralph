@@ -831,6 +831,40 @@ describe('formatMonitorOutput', () => {
     expect(output).toContain('Red (30s)');
   });
 
+  it('shows loop spend and task spend when provided', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [{ phase: 'Boot', startedAt: null }],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      loopSpend: 12.5,
+      taskSpend: 3.25,
+    });
+    expect(output).toContain('$12.50');
+    expect(output).toContain('$3.25');
+  });
+
+  it('does not show spend lines when spend values are undefined', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 3,
+      total: 10,
+      currentTaskId: 'T-004',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [{ phase: 'Boot', startedAt: null }],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+    });
+    expect(output).not.toContain('Spend');
+    expect(output).not.toContain('$');
+  });
+
   it('does not freeze timers when RUNNING', () => {
     const fiveSecondsAgo = new Date(Date.now() - 5_000);
     const output = formatMonitorOutput({

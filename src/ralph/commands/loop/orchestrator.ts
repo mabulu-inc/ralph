@@ -15,6 +15,7 @@ import {
 } from '../../core/preflight.js';
 import { updateField } from '../../core/markdown.js';
 import { parseSessionResult } from '../../core/jsonl-result.js';
+import { calculateTaskCost, calculateLogFileCost } from '../../core/cost-tracker.js';
 import { run as runShas } from '../shas.js';
 import { run as runCost } from '../cost.js';
 import { run as runMilestones } from '../milestones.js';
@@ -78,6 +79,7 @@ export class LoopOrchestrator {
     preflightBaseline = '',
   ): Promise<void> {
     let lastFailedTaskId: string | undefined;
+    let loopSpend = 0;
 
     for (
       let iteration = 1;
@@ -107,6 +109,14 @@ export class LoopOrchestrator {
         console.log(
           `[Iteration ${iteration}] ${nextTask.id} BLOCKED after ${attempts} failures (max ${config.maxRetries})`,
         );
+        continue;
+      }
+
+      const taskCost = await calculateTaskCost(this.logsDir, nextTask.id);
+      if (taskCost >= config.maxCostPerTask) {
+        const reason = `cost limit exceeded ($${taskCost.toFixed(2)} >= $${config.maxCostPerTask.toFixed(2)})`;
+        await this.markTaskBlocked(nextTask.id, reason);
+        console.log(`[Iteration ${iteration}] ${nextTask.id} BLOCKED: ${reason}`);
         continue;
       }
 
@@ -200,6 +210,16 @@ export class LoopOrchestrator {
         timeoutMs: effectiveTimeout * 1000,
         onOutput: this.opts.verbose ? (data: string) => process.stdout.write(data) : undefined,
       });
+
+      const iterationCost = await calculateLogFileCost(logFile);
+      loopSpend += iterationCost;
+
+      if (loopSpend >= config.maxLoopBudget) {
+        console.log(
+          `[Iteration ${iteration}] loop budget exceeded ($${loopSpend.toFixed(2)} >= $${config.maxLoopBudget.toFixed(2)}) — stopping`,
+        );
+        return;
+      }
 
       if (result.timedOut) {
         console.error(`[Iteration ${iteration}] Timed out after ${effectiveTimeout}s`);

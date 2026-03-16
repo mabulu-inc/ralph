@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { scanTasks, countByStatus, type Task } from '../core/tasks.js';
 import { readPidFile } from '../core/pid-file.js';
+import { calculateTaskCost, calculateLogFileCost } from '../core/cost-tracker.js';
 
 const ALL_PHASES = ['Boot', 'Red', 'Green', 'Verify', 'Commit'] as const;
 
@@ -432,6 +433,8 @@ export interface MonitorData {
   lastLogLine: string | null;
   lastOutputTimestamp: Date | null;
   lastActivity: ToolUseInfo | null;
+  loopSpend?: number;
+  taskSpend?: number;
 }
 
 export function formatMonitorOutput(data: MonitorData): string {
@@ -442,6 +445,17 @@ export function formatMonitorOutput(data: MonitorData): string {
   // When STOPPED, freeze all "ago" timers at the last known timestamp
   // instead of letting them tick up from Date.now()
   const now = data.status === 'STOPPED' ? computeFrozenNow(data) : Date.now();
+
+  if (data.loopSpend !== undefined || data.taskSpend !== undefined) {
+    const parts: string[] = [];
+    if (data.loopSpend !== undefined) {
+      parts.push(`loop $${data.loopSpend.toFixed(2)}`);
+    }
+    if (data.taskSpend !== undefined) {
+      parts.push(`task $${data.taskSpend.toFixed(2)}`);
+    }
+    lines.push(`Spend: ${parts.join(' / ')}`);
+  }
 
   if (data.currentTaskId) {
     const title = data.currentTaskTitle ? `: ${data.currentTaskTitle}` : '';
@@ -531,6 +545,26 @@ export async function collectMonitorData(
     }
   }
 
+  let loopSpend: number | undefined;
+  let taskSpend: number | undefined;
+
+  try {
+    const logEntries = await readdir(logsDir);
+    const logFiles = logEntries.filter((f) => f.endsWith('.jsonl'));
+    if (logFiles.length > 0) {
+      let total = 0;
+      for (const f of logFiles) {
+        total += await calculateLogFileCost(join(logsDir, f));
+      }
+      loopSpend = total;
+    }
+    if (currentTaskId) {
+      taskSpend = await calculateTaskCost(logsDir, currentTaskId);
+    }
+  } catch {
+    // Cost tracking is best-effort
+  }
+
   return {
     status,
     done: counts.DONE,
@@ -541,6 +575,8 @@ export async function collectMonitorData(
     lastLogLine,
     lastOutputTimestamp,
     lastActivity,
+    loopSpend,
+    taskSpend,
   };
 }
 

@@ -438,6 +438,34 @@ describe('runInit creates ralph.config.json', () => {
     expect(config.model).toBeUndefined();
   });
 
+  it('includes maxCostPerTask in ralph.config.json when not default', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, maxCostPerTask: 5 };
+    await runInit(tmpDir, answers);
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8'));
+    expect(config.maxCostPerTask).toBe(5);
+  });
+
+  it('includes maxLoopBudget in ralph.config.json when not default', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, maxLoopBudget: 50 };
+    await runInit(tmpDir, answers);
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8'));
+    expect(config.maxLoopBudget).toBe(50);
+  });
+
+  it('omits maxCostPerTask from ralph.config.json when default (10)', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, maxCostPerTask: 10 };
+    await runInit(tmpDir, answers);
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8'));
+    expect(config.maxCostPerTask).toBeUndefined();
+  });
+
+  it('omits maxLoopBudget from ralph.config.json when default (100)', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, maxLoopBudget: 100 };
+    await runInit(tmpDir, answers);
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8'));
+    expect(config.maxLoopBudget).toBeUndefined();
+  });
+
   it('skips unchanged ralph.config.json silently on re-init', async () => {
     await runInit(tmpDir, defaultAnswers);
     const result = await runInit(tmpDir, defaultAnswers);
