@@ -7,6 +7,7 @@ import {
   formatRetryContext,
   findLatestLogForTask,
   buildRetryContext,
+  extractBlockedSignal,
   type RetryContext,
 } from '../core/retry-context.js';
 
@@ -259,6 +260,85 @@ describe('formatRetryContext', () => {
 
     const result = formatRetryContext(ctx);
     expect(result).toMatch(/focus|failure|fix/i);
+  });
+
+  it('includes fail-fast BLOCKED guidance in retry context', () => {
+    const ctx: RetryContext = {
+      lastPhase: 'Green',
+      lastError: 'Cannot resolve module',
+      modifiedFiles: ['src/foo.ts'],
+    };
+
+    const result = formatRetryContext(ctx);
+    expect(result).toContain('[BLOCKED]');
+    expect(result).toMatch(/same blocker|same .* blocker/i);
+    expect(result).toMatch(/stop|bail|immediately/i);
+  });
+});
+
+describe('extractBlockedSignal', () => {
+  it('returns null when no BLOCKED signal is present', () => {
+    const logContent = [
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: '[PHASE] Entering: Boot' }] },
+      }),
+    ].join('\n');
+
+    expect(extractBlockedSignal(logContent)).toBeNull();
+  });
+
+  it('extracts reason from [BLOCKED] signal in assistant text', () => {
+    const logContent = [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: '[BLOCKED] Cannot resolve circular dependency' }],
+        },
+      }),
+    ].join('\n');
+
+    const result = extractBlockedSignal(logContent);
+    expect(result).toBe('Cannot resolve circular dependency');
+  });
+
+  it('returns the last BLOCKED signal when multiple exist', () => {
+    const logContent = [
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: '[BLOCKED] First issue' }] },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: '[BLOCKED] Actual final blocker' }] },
+      }),
+    ].join('\n');
+
+    const result = extractBlockedSignal(logContent);
+    expect(result).toBe('Actual final blocker');
+  });
+
+  it('extracts BLOCKED from multi-line text blocks', () => {
+    const logContent = [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'text',
+              text: 'I tried multiple approaches.\n[BLOCKED] Same dependency error as before\nStopping now.',
+            },
+          ],
+        },
+      }),
+    ].join('\n');
+
+    const result = extractBlockedSignal(logContent);
+    expect(result).toBe('Same dependency error as before');
+  });
+
+  it('returns null for empty log content', () => {
+    expect(extractBlockedSignal('')).toBeNull();
   });
 });
 

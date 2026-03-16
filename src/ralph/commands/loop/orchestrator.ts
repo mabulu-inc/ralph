@@ -7,7 +7,7 @@ import { ensureProvidersRegistered } from '../../providers/index.js';
 import { spawnWithCapture, monitorProcess } from '../../core/process.js';
 import { writePidFile, removePidFile } from '../../core/pid-file.js';
 import { loadLayeredPrompt } from '../../core/prompt-template.js';
-import { buildRetryContext } from '../../core/retry-context.js';
+import { buildRetryContext, extractBlockedSignal } from '../../core/retry-context.js';
 import {
   runPreflightCheck,
   formatPreflightBaseline,
@@ -207,6 +207,14 @@ export class LoopOrchestrator {
         continue;
       }
 
+      const blockedReason = await this.checkBlockedSignal(logFile);
+      if (blockedReason) {
+        await this.markTaskBlocked(nextTask.id, blockedReason);
+        console.log(`[Iteration ${iteration}] ${nextTask.id} BLOCKED by agent: ${blockedReason}`);
+        lastFailedTaskId = nextTask.id;
+        continue;
+      }
+
       if (result.exitCode !== 0) {
         const sessionResult = await parseSessionResult(logFile);
         if (sessionResult?.subtype === 'error_max_turns') {
@@ -262,6 +270,15 @@ export class LoopOrchestrator {
     }
 
     console.log('Loop complete');
+  }
+
+  private async checkBlockedSignal(logFile: string): Promise<string | null> {
+    try {
+      const content = await readFile(logFile, 'utf-8');
+      return extractBlockedSignal(content);
+    } catch {
+      return null;
+    }
   }
 
   private async countTaskAttempts(taskId: string): Promise<number> {

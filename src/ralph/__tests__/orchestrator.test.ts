@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -776,6 +777,49 @@ describe('LoopOrchestrator', () => {
     const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
     expect(output).toContain('T-001');
     expect(output).toContain('BLOCKED');
+  });
+
+  it('detects [BLOCKED] signal in agent output and marks task BLOCKED', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    // Agent exits 0 but no commit (HEAD unchanged) — BLOCKED signal in log
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValue('same_sha');
+
+    // Write a log file that contains [BLOCKED] signal
+    // The orchestrator writes to .ralph-logs/T-001-<timestamp>.jsonl
+    // We need to intercept spawnWithCapture to write a log with BLOCKED signal
+    const logsDir = join(tmpDir, '.ralph-logs');
+    await mkdir(logsDir, { recursive: true });
+
+    // Override spawnWithCapture to write a blocked log
+    spawnWithCapture.mockImplementation((_cmd, _args, opts) => {
+      const logFile = (opts as { logFile?: string }).logFile;
+      if (logFile) {
+        const blockedLog = JSON.stringify({
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'text', text: '[BLOCKED] Same circular dependency as previous attempt' },
+            ],
+          },
+        });
+        writeFileSync(logFile, blockedLog + '\n');
+      }
+      return { pid: 12345, stdout: null, stderr: null } as unknown as ReturnType<
+        typeof processModule.spawnWithCapture
+      >;
+    });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    // Should log the BLOCKED detection
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('BLOCKED');
+    expect(output).toContain('circular dependency');
   });
 
   it('does not mark task as BLOCKED when retries are under the limit', async () => {

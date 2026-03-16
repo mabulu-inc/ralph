@@ -156,12 +156,39 @@ export function formatRetryContext(ctx: RetryContext | null): string {
     'IMPORTANT: The previous attempt failed. Avoid repeating the same approach. Focus on fixing the failure point rather than rewriting from scratch. Reference the files listed above as your starting point.',
   );
 
+  sections.push('');
+  sections.push(
+    'FAIL-FAST RULE: If you encounter the same blocker described above, do NOT continue trying workarounds. Instead, immediately output `[BLOCKED] <reason>` and end your turn. This saves turns and cost.',
+  );
+
   let result = sections.join('\n');
   if (result.length > MAX_RETRY_CONTEXT_LENGTH) {
     result = result.slice(0, MAX_RETRY_CONTEXT_LENGTH - 3) + '...';
   }
 
   return result;
+}
+
+const BLOCKED_RE = /\[BLOCKED\]\s*(.+)/;
+
+export function extractBlockedSignal(logContent: string): string | null {
+  if (!logContent.trim()) return null;
+
+  const lines = parseLogLines(logContent);
+  let lastBlocked: string | null = null;
+
+  for (const line of lines) {
+    if (line.type === 'text') {
+      for (const textLine of line.text.split('\n')) {
+        const match = textLine.match(BLOCKED_RE);
+        if (match) {
+          lastBlocked = match[1].trim();
+        }
+      }
+    }
+  }
+
+  return lastBlocked;
 }
 
 export async function findLatestLogForTask(
