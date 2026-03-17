@@ -11,7 +11,7 @@ const COMMANDS = [
 type Command = (typeof COMMANDS)[number];
 
 export type DispatchResult =
-  | { action: 'help'; unknown?: string }
+  | { action: 'help'; unknown?: string; command?: Command }
   | { action: Command; args: string[] };
 
 export function dispatch(argv: string[]): DispatchResult {
@@ -22,7 +22,11 @@ export function dispatch(argv: string[]): DispatchResult {
   }
 
   if (COMMANDS.includes(first as Command)) {
-    return { action: first as Command, args: argv.slice(1) };
+    const args = argv.slice(1);
+    if (args.includes('--help') || args.includes('-h')) {
+      return { action: 'help', command: first as Command };
+    }
+    return { action: first as Command, args };
   }
 
   return { action: 'help', unknown: first };
@@ -48,5 +52,49 @@ export function formatHelp(unknown?: string): string {
   lines.push('  cost        Calculate token usage and costs');
   lines.push('  update      Refresh methodology and prompt templates');
 
+  return lines.join('\n');
+}
+
+const COMMAND_HELP: Record<Command, { description: string; usage: string }> = {
+  init: {
+    description: 'Bootstrap a new Ralph project',
+    usage: 'ralph init',
+  },
+  loop: {
+    description: 'Run the AI development loop',
+    usage: 'ralph loop [options]',
+  },
+  monitor: {
+    description: 'Show real-time progress',
+    usage: 'ralph monitor',
+  },
+  kill: {
+    description: 'Stop ralph and all child processes',
+    usage: 'ralph kill',
+  },
+  milestones: {
+    description: 'Generate milestones summary',
+    usage: 'ralph milestones',
+  },
+  shas: {
+    description: 'Backfill commit SHAs in task files',
+    usage: 'ralph shas',
+  },
+  cost: {
+    description: 'Calculate token usage and costs',
+    usage: 'ralph cost',
+  },
+  update: {
+    description: 'Refresh methodology and prompt templates',
+    usage: 'ralph update',
+  },
+};
+
+export function formatCommandHelp(command: Command): string {
+  const info = COMMAND_HELP[command];
+  const lines: string[] = [];
+  lines.push(info.description);
+  lines.push('');
+  lines.push(`Usage: ${info.usage}`);
   return lines.join('\n');
 }

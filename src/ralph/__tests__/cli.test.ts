@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dispatch, formatHelp } from '../cli.js';
+import { dispatch, formatHelp, formatCommandHelp } from '../cli.js';
 
 const KNOWN_COMMANDS = [
   'init',
@@ -42,6 +42,21 @@ describe('CLI dispatch', () => {
     const result = dispatch(['-h']);
     expect(result).toEqual({ action: 'help' });
   });
+
+  it.each(KNOWN_COMMANDS)('returns help action with command when %s --help is passed', (cmd) => {
+    const result = dispatch([cmd, '--help']);
+    expect(result).toEqual({ action: 'help', command: cmd });
+  });
+
+  it.each(KNOWN_COMMANDS)('returns help action with command when %s -h is passed', (cmd) => {
+    const result = dispatch([cmd, '-h']);
+    expect(result).toEqual({ action: 'help', command: cmd });
+  });
+
+  it('returns help action with command when --help appears among other args', () => {
+    const result = dispatch(['loop', '-n', '5', '--help']);
+    expect(result).toEqual({ action: 'help', command: 'loop' });
+  });
 });
 
 describe('CLI help text', () => {
@@ -58,5 +73,11 @@ describe('CLI help text', () => {
     const help = formatHelp('bogus');
     expect(help).toContain('bogus');
     expect(help).toContain('Unknown');
+  });
+
+  it.each(KNOWN_COMMANDS)('formatCommandHelp returns help text for %s', (cmd) => {
+    const help = formatCommandHelp(cmd);
+    expect(help).toContain(`ralph ${cmd}`);
+    expect(help).toContain('Usage:');
   });
 });
