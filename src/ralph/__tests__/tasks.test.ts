@@ -226,6 +226,46 @@ const MINIMAL_TASK = `# T-010: Minimal
 Minimal task.
 `;
 
+const TASK_WITH_FULL_BODY = `# T-073: Full body task
+
+- **Status**: TODO
+- **Milestone**: 13 — Prompt Fidelity
+- **Depends**: none
+- **PRD Reference**: §1, §5.1
+
+## Description
+
+First paragraph of the description.
+
+Second paragraph with more details.
+
+## Changes
+
+- Modify file A
+- Modify file B
+
+## AC
+
+- Criterion 1
+- Criterion 2
+
+## Scope
+
+Only the core module.
+
+## Hints
+
+Follow the existing pattern.
+
+## Produces
+
+- \`src/core/tasks.ts\`
+
+## Completion Notes
+
+Done.
+`;
+
 // --- Tests ---
 
 describe('parseTaskFile', () => {
@@ -496,6 +536,19 @@ Test task.
       const task = parseTaskFile('T-072.md', content);
       expect(task.complexity).toBe(tier);
     }
+  });
+
+  it('extracts full task body with multiple sections for description', () => {
+    const task = parseTaskFile('T-073.md', TASK_WITH_FULL_BODY);
+    expect(task.description).toContain('First paragraph of the description.');
+    expect(task.description).toContain('Second paragraph with more details.');
+    expect(task.description).toContain('Modify file A');
+    expect(task.description).toContain('Criterion 1');
+    expect(task.description).toContain('Only the core module.');
+    // Excluded sections
+    expect(task.description).not.toContain('Follow the existing pattern');
+    expect(task.description).not.toContain('src/core/tasks.ts');
+    expect(task.description).not.toContain('Done.');
   });
 
   it('parses BLOCKED status', () => {

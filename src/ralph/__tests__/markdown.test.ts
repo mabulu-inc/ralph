@@ -6,6 +6,7 @@ import {
   hasSection,
   countListItemsInSection,
   extractSectionFirstParagraph,
+  extractTaskBody,
   findSection,
   updateField,
 } from '../core/markdown.js';
@@ -144,6 +145,180 @@ More text.
   it('returns empty string for missing section', () => {
     const tree = parseMarkdown('# Title');
     expect(extractSectionFirstParagraph(tree, 'Description')).toBe('');
+  });
+});
+
+describe('extractTaskBody', () => {
+  it('returns full Description content including multiple paragraphs', () => {
+    const tree = parseMarkdown(`# T-001: Test
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+First paragraph.
+
+Second paragraph with more details.
+
+## Produces
+
+- \`src/a.ts\`
+`);
+    const body = extractTaskBody(tree);
+    expect(body).toContain('First paragraph.');
+    expect(body).toContain('Second paragraph with more details.');
+  });
+
+  it('includes content from Changes, AC, and Scope sections', () => {
+    const tree = parseMarkdown(`# T-002: Multi-section
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+The main description.
+
+## Changes
+
+- Change file A
+- Change file B
+
+## AC
+
+- Acceptance criterion 1
+- Acceptance criterion 2
+
+## Scope
+
+Only modify module X.
+
+## Produces
+
+- \`src/b.ts\`
+`);
+    const body = extractTaskBody(tree);
+    expect(body).toContain('The main description.');
+    expect(body).toContain('Change file A');
+    expect(body).toContain('Change file B');
+    expect(body).toContain('Acceptance criterion 1');
+    expect(body).toContain('Acceptance criterion 2');
+    expect(body).toContain('Only modify module X.');
+  });
+
+  it('excludes Hints section', () => {
+    const tree = parseMarkdown(`# T-003: With hints
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+The description.
+
+## Hints
+
+Follow the existing pattern.
+
+## Produces
+
+- \`src/c.ts\`
+`);
+    const body = extractTaskBody(tree);
+    expect(body).toContain('The description.');
+    expect(body).not.toContain('Follow the existing pattern');
+  });
+
+  it('excludes Produces, Completion Notes, and Blocked sections', () => {
+    const tree = parseMarkdown(`# T-004: Excluded sections
+
+- **Status**: DONE
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+The description.
+
+## Blocked
+
+Waiting for upstream.
+
+## Produces
+
+- \`src/d.ts\`
+
+## Completion Notes
+
+Done. 5 tests.
+`);
+    const body = extractTaskBody(tree);
+    expect(body).toContain('The description.');
+    expect(body).not.toContain('Waiting for upstream');
+    expect(body).not.toContain('src/d.ts');
+    expect(body).not.toContain('Done. 5 tests');
+  });
+
+  it('returns empty string when no actionable sections exist', () => {
+    const tree = parseMarkdown(`# T-005: No sections
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Produces
+
+- \`src/e.ts\`
+`);
+    const body = extractTaskBody(tree);
+    expect(body).toBe('');
+  });
+
+  it('includes section headers for non-Description actionable sections', () => {
+    const tree = parseMarkdown(`# T-006: With AC
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+The description.
+
+## AC
+
+- Must pass tests
+`);
+    const body = extractTaskBody(tree);
+    expect(body).toContain('## AC');
+    expect(body).toContain('Must pass tests');
+  });
+
+  it('does not prefix Description content with a section header', () => {
+    const tree = parseMarkdown(`# T-007: Description only
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+Just the description.
+`);
+    const body = extractTaskBody(tree);
+    expect(body).not.toMatch(/^## Description/);
+    expect(body).toContain('Just the description.');
   });
 });
 

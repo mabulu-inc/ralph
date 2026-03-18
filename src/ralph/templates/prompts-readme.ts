@@ -21,7 +21,7 @@ The following variables are available in \`boot.md\`. Ralph replaces them before
 |----------|-------------|
 | \`{{task.id}}\` | Task identifier (e.g., \`T-005\`) |
 | \`{{task.title}}\` | Task title from the heading |
-| \`{{task.description}}\` | Full description from the task file |
+| \`{{task.description}}\` | Full task body: Description, Changes, AC, and Scope sections (excludes Hints, Produces, Completion Notes, Blocked) |
 | \`{{task.prdReference}}\` | PRD section reference (e.g., \`§3.2\`) |
 | \`{{task.prdContent}}\` | Extracted PRD section content matching the task's PRD Reference |
 | \`{{task.touches}}\` | Comma-separated file paths from the Touches field, or "not specified" if empty |

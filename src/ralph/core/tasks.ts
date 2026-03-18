@@ -7,6 +7,7 @@ import {
   hasSection,
   countListItemsInSection,
   extractSectionFirstParagraph,
+  extractTaskBody,
 } from './markdown.js';
 import type { ComplexityTier } from './complexity.js';
 
@@ -76,7 +77,7 @@ export function parseTaskFile(filename: string, content: string): Task {
   const touchesRaw = extractFieldFromAst(tree, 'Touches');
   const touches = parseTouches(touchesRaw);
   const hints = extractSectionFirstParagraph(tree, 'Hints');
-  const description = extractSectionFirstParagraph(tree, 'Description');
+  const description = extractTaskBody(tree);
   const producesCount = countListItemsInSection(tree, 'Produces');
   const complexityRaw = extractFieldFromAst(tree, 'Complexity');
   const complexity = parseComplexity(complexityRaw);

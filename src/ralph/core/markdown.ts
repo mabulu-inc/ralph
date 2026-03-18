@@ -124,6 +124,31 @@ export function extractSectionFirstParagraph(tree: Root, headingText: string): s
   return '';
 }
 
+const ACTIONABLE_SECTIONS = ['Description', 'Changes', 'AC', 'Scope'];
+
+export function extractTaskBody(tree: Root): string {
+  const parts: string[] = [];
+
+  for (const section of ACTIONABLE_SECTIONS) {
+    const nodes = findSection(tree, section);
+    if (nodes.length === 0) continue;
+
+    const text = nodes
+      .map((n) => toString(n))
+      .join('\n\n')
+      .trim();
+    if (!text) continue;
+
+    if (section === 'Description') {
+      parts.push(text);
+    } else {
+      parts.push(`## ${section}\n\n${text}`);
+    }
+  }
+
+  return parts.join('\n\n');
+}
+
 /**
  * Update or insert a bold-field value in Markdown source text.
  *
