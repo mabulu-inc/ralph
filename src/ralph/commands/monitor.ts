@@ -205,7 +205,7 @@ export async function readLoopStartSnapshot(logsDir: string): Promise<LoopStartS
 export function formatRunProgress(currentDone: number, snapshot: LoopStartSnapshot): string {
   const completedThisRun = currentDone - snapshot.doneAtStart;
   const remainingAtStart = snapshot.total - snapshot.doneAtStart;
-  return `This run: ${completedThisRun}/${remainingAtStart} tasks completed`;
+  return `This run: ${formatProgressBar(completedThisRun, remainingAtStart)}`;
 }
 
 export async function readLogTail(filePath: string, maxBytes = 32768): Promise<string> {
@@ -470,7 +470,7 @@ export interface MonitorData {
 export function formatMonitorOutput(data: MonitorData): string {
   const lines: string[] = [];
   lines.push(`Status: ${data.status}`);
-  lines.push(`Progress: ${formatProgressBar(data.done, data.total)}`);
+  lines.push(`Overall: ${formatProgressBar(data.done, data.total)}`);
   if (data.loopStartSnapshot) {
     lines.push(formatRunProgress(data.done, data.loopStartSnapshot));
   }

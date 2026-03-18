@@ -618,6 +618,8 @@ describe('formatMonitorOutput', () => {
       lastActivity: null,
     });
     expect(output).toContain('RUNNING');
+    expect(output).toContain('Overall:');
+    expect(output).not.toContain('Progress:');
     expect(output).toContain('5/10');
     expect(output).toContain('T-006');
     expect(output).toContain('Monitor command');
@@ -1243,7 +1245,7 @@ describe('formatRunProgress', () => {
       total: 89,
       startedAt: '2026-03-10T12:00:00Z',
     });
-    expect(result).toBe('This run: 2/19 tasks completed');
+    expect(result).toBe('This run: [██░░░░░░░░░░░░░░░░░░] 2/19 (11%)');
   });
 
   it('shows zero progress when nothing new completed', () => {
@@ -1252,7 +1254,7 @@ describe('formatRunProgress', () => {
       total: 89,
       startedAt: '2026-03-10T12:00:00Z',
     });
-    expect(result).toBe('This run: 0/19 tasks completed');
+    expect(result).toBe('This run: [░░░░░░░░░░░░░░░░░░░░] 0/19 (0%)');
   });
 
   it('shows all completed when everything done', () => {
@@ -1261,7 +1263,7 @@ describe('formatRunProgress', () => {
       total: 89,
       startedAt: '2026-03-10T12:00:00Z',
     });
-    expect(result).toBe('This run: 19/19 tasks completed');
+    expect(result).toBe('This run: [████████████████████] 19/19 (100%)');
   });
 
   it('handles case where total increased since snapshot', () => {
@@ -1271,7 +1273,7 @@ describe('formatRunProgress', () => {
       total: 89,
       startedAt: '2026-03-10T12:00:00Z',
     });
-    expect(result).toBe('This run: 5/19 tasks completed');
+    expect(result).toBe('This run: [█████░░░░░░░░░░░░░░░] 5/19 (26%)');
   });
 });
 
@@ -1289,7 +1291,7 @@ describe('formatMonitorOutput with per-invocation progress', () => {
       lastActivity: null,
       loopStartSnapshot: { doneAtStart: 70, total: 89, startedAt: '2026-03-10T12:00:00Z' },
     });
-    expect(output).toContain('This run: 2/19 tasks completed');
+    expect(output).toContain('This run: [██░░░░░░░░░░░░░░░░░░] 2/19 (11%)');
   });
 
   it('omits per-invocation line when no snapshot', () => {
