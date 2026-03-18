@@ -31,7 +31,12 @@ export function generateMilestones(tasks: MilestoneTask[]): string {
     milestoneGroups.get(task.milestone)!.push(task);
   }
 
-  const lines: string[] = ['# Milestones', ''];
+  const lines: string[] = [
+    '# Milestones',
+    '',
+    '> **Auto-generated** by `ralph milestones` — do not edit manually.',
+    '',
+  ];
   let grandTotal = 0;
 
   for (const milestone of milestoneOrder) {
