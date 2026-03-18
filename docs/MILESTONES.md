@@ -114,8 +114,8 @@
 - [x] T-065: Show per-invocation progress alongside total progress in monitor — $0.81
 - [x] T-066: Fail-fast on quality-check preflight by default — $0.93
 
-## 15 — Rebranding
+## 15 — Rebranding ($1.28)
 
-- [ ] T-071: Rename package to @smplcty/ralph
+- [x] T-071: Rename package from @smplcty/ralph to @smplcty/ralph — $1.28
 
-**Grand Total: $57.64**
+**Grand Total: $58.92**
