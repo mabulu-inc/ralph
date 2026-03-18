@@ -2,6 +2,10 @@
   "name": "@smplcty/ralph",
   "version": "0.6.1",
   "description": "Stateless, PRD-driven AI development loop — automated TDD with Claude Code, Gemini CLI, Codex, Continue, and Cursor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mabulu-inc/simplicity-ralph.git"
+  },
   "type": "module",
   "main": "./dist/ralph/cli.js",
   "bin": {
