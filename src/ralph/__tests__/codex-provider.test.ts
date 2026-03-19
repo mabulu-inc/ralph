@@ -62,4 +62,18 @@ describe('codexProvider', () => {
   it('has empty system prompt flag', () => {
     expect(codexProvider.systemPromptFlag).toBe('');
   });
+
+  it('has empty text output format (text is default without --json)', () => {
+    expect(codexProvider.textOutputFormat).toEqual([]);
+  });
+
+  it('builds args without json flag when using text output format', () => {
+    const args = codexProvider.buildArgs('do something', {
+      outputFormat: codexProvider.textOutputFormat,
+    });
+
+    expect(args).not.toContain('--json');
+    expect(args).toContain('exec');
+    expect(args).toContain('do something');
+  });
 });

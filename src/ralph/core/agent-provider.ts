@@ -8,6 +8,7 @@ export interface BuildArgsOptions {
 export interface AgentProvider {
   readonly binary: string;
   readonly outputFormat: string[];
+  readonly textOutputFormat: string[];
   readonly supportsMaxTurns: boolean;
   readonly supportsSystemPrompt: boolean;
   readonly systemPromptFlag: string;

@@ -61,4 +61,8 @@ describe('geminiProvider', () => {
   it('has empty system prompt flag', () => {
     expect(geminiProvider.systemPromptFlag).toBe('');
   });
+
+  it('has text output format for plain text output', () => {
+    expect(geminiProvider.textOutputFormat).toEqual(['--output-format', 'text']);
+  });
 });

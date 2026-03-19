@@ -3,6 +3,7 @@ import type { AgentProvider, BuildArgsOptions } from '../core/agent-provider.js'
 export const claudeProvider: AgentProvider = {
   binary: 'claude',
   outputFormat: ['--output-format', 'stream-json'],
+  textOutputFormat: ['--output-format', 'text'],
   supportsMaxTurns: true,
   supportsSystemPrompt: true,
   systemPromptFlag: '--system-prompt',

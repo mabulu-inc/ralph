@@ -84,4 +84,8 @@ describe('continueProvider', () => {
   it('has empty system prompt flag', () => {
     expect(continueProvider.systemPromptFlag).toBe('');
   });
+
+  it('has text output format for plain text output', () => {
+    expect(continueProvider.textOutputFormat).toEqual(['--output-format', 'text']);
+  });
 });

@@ -3,6 +3,7 @@ import type { AgentProvider, BuildArgsOptions } from '../core/agent-provider.js'
 export const codexProvider: AgentProvider = {
   binary: 'codex',
   outputFormat: ['--json'],
+  textOutputFormat: [],
   supportsMaxTurns: false,
   supportsSystemPrompt: false,
   systemPromptFlag: '',

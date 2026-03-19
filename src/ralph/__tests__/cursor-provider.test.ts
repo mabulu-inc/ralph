@@ -61,4 +61,8 @@ describe('cursorProvider', () => {
   it('has empty system prompt flag', () => {
     expect(cursorProvider.systemPromptFlag).toBe('');
   });
+
+  it('has text output format for plain text output', () => {
+    expect(cursorProvider.textOutputFormat).toEqual(['--output-format', 'text']);
+  });
 });

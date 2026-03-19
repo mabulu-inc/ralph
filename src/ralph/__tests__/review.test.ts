@@ -356,6 +356,66 @@ describe('review command', () => {
       }
     });
 
+    it('buildSpawnAgent passes textOutputFormat to provider.buildArgs', async () => {
+      const { run } = await import('../commands/review.js');
+      const processModule = await import('../core/process.js');
+
+      // Spy on spawnWithCapture to inspect the args passed to the provider binary
+      const spawnSpy = vi
+        .spyOn(processModule, 'spawnWithCapture')
+        .mockReturnValue({ stdout: { on: vi.fn() }, stderr: null, pid: 1 } as never);
+      const monitorSpy = vi
+        .spyOn(processModule, 'monitorProcess')
+        .mockResolvedValue({ exitCode: 0 } as never);
+
+      // Write a config with claude agent
+      await writeFile(
+        join(tmpDir, 'ralph.config.json'),
+        JSON.stringify({
+          language: 'TypeScript',
+          packageManager: 'pnpm',
+          testingFramework: 'Vitest',
+          qualityCheck: 'pnpm check',
+          testCommand: 'pnpm test',
+          agent: 'claude',
+        }),
+      );
+
+      // Write a task file and PRD so coaching can find them
+      await writeFile(join(tasksDir, 'T-042.md'), '# T-042: Test\n- **Status**: TODO\n');
+      await writeFile(join(tmpDir, 'docs', 'PRD.md'), '# PRD\n');
+
+      const coachModule = await import('../core/coach.js');
+      // Don't mock runCoaching — instead let it call spawnAgent which we can inspect via spawnSpy
+      // But runCoaching is complex, so mock it but capture the spawnAgent and call it
+      const runCoachingSpy = vi
+        .spyOn(coachModule, 'runCoaching')
+        .mockImplementation(async (_taskId, _dir, opts) => {
+          // Call the spawnAgent to verify args
+          await opts.spawnAgent({ systemPrompt: 'test', userPrompt: 'test prompt' });
+          return { mode: 'project', analysis: 'test', timestamp: new Date().toISOString() };
+        });
+
+      const logs: string[] = [];
+      const origLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+      try {
+        await run(['--coach'], tmpDir);
+        // Verify spawnWithCapture was called with the claude binary
+        expect(spawnSpy).toHaveBeenCalledOnce();
+        const [binary, args] = spawnSpy.mock.calls[0];
+        expect(binary).toBe('claude');
+        // The key assertion: args should contain text format, not stream-json
+        expect(args).toContain('text');
+        expect(args).not.toContain('stream-json');
+      } finally {
+        console.log = origLog;
+        spawnSpy.mockRestore();
+        monitorSpy.mockRestore();
+        runCoachingSpy.mockRestore();
+      }
+    });
+
     it('reads agent from ralph.config.json when --coach is used without coachOpts', async () => {
       const { run } = await import('../commands/review.js');
 

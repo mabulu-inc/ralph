@@ -3,6 +3,7 @@ import type { AgentProvider, BuildArgsOptions } from '../core/agent-provider.js'
 export const geminiProvider: AgentProvider = {
   binary: 'gemini',
   outputFormat: ['--output-format', 'stream-json'],
+  textOutputFormat: ['--output-format', 'text'],
   supportsMaxTurns: false,
   supportsSystemPrompt: false,
   systemPromptFlag: '',

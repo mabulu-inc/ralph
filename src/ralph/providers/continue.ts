@@ -3,6 +3,7 @@ import type { AgentProvider, BuildArgsOptions } from '../core/agent-provider.js'
 export const continueProvider: AgentProvider = {
   binary: 'cn',
   outputFormat: ['--output-format', 'stream-json'],
+  textOutputFormat: ['--output-format', 'text'],
   supportsMaxTurns: true,
   supportsSystemPrompt: false,
   systemPromptFlag: '',

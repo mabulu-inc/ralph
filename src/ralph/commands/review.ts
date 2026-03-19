@@ -359,7 +359,7 @@ function buildSpawnAgent(
   const provider = getProvider(agentName);
   return async (opts) => {
     const agentArgs = provider.buildArgs(opts.userPrompt, {
-      outputFormat: provider.outputFormat,
+      outputFormat: provider.textOutputFormat,
       systemPrompt: opts.systemPrompt,
     });
     const child = spawnWithCapture(provider.binary, agentArgs, {});

@@ -114,4 +114,18 @@ describe('claudeProvider', () => {
 
     expect(args).not.toContain('--system-prompt');
   });
+
+  it('has text output format for plain text output', () => {
+    expect(claudeProvider.textOutputFormat).toEqual(['--output-format', 'text']);
+  });
+
+  it('builds args with text output format producing text flags', () => {
+    const args = claudeProvider.buildArgs('do something', {
+      outputFormat: claudeProvider.textOutputFormat,
+    });
+
+    expect(args).toContain('--output-format');
+    expect(args).toContain('text');
+    expect(args).not.toContain('stream-json');
+  });
 });
