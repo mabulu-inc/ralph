@@ -13,18 +13,22 @@ The main AI development loop. Runs the configured AI coding agent in stateless i
 
 ## How It Works
 
-Each iteration:
+Each iteration is a structured collaboration between [9 specialized agent roles](/simplicity-ralph/core-concepts/roles/) — Product Manager, Architect, Security Engineer, and more. The roles participate at specific phases, with Boot and Verify acting as gate phases requiring explicit approval.
 
-1. **Pre-flight** — verify agent CLI is installed, `docs/tasks/` and `docs/prompts/boot.md` exist, and quality check passes (aborts by default if it fails — use `--allow-dirty` to override)
+The iteration flow:
+
+1. **Pre-flight** — verify agent CLI is installed, `docs/tasks/` exists, and quality check passes (aborts by default if it fails — use `--allow-dirty` to override)
 2. **Database** — start Docker containers if configured
 3. **Clean slate** — discard unstaged changes from crashed iterations
 4. **Find next task** — select lowest-numbered eligible TODO
-5. **Build prompt** — interpolate boot prompt template with task and config variables
+5. **Build prompt** — assemble the built-in prompt layers with task and config variables
 6. **Launch agent** — spawn the agent CLI with the rendered prompt
 7. **Monitor** — track progress via the agent's output stream
 8. **Timeout** — kill iterations exceeding the time limit
 9. **Commit detection** — end iteration after a commit lands
 10. **Post-iteration** — backfill SHAs, update costs, regenerate milestones, push
+
+Ralph's built-in prompts, roles, and methodology are used directly from the package — they are not read from files in your project. User extensions in `docs/prompts/` are appended to the built-in content at prompt assembly time.
 
 ## Options
 
@@ -70,3 +74,5 @@ The loop stops when:
 - All tasks are `DONE`
 - Max iterations reached
 - User interrupt (Ctrl+C)
+
+The exit reason is captured and displayed by `ralph monitor`.

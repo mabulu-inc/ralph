@@ -36,6 +36,7 @@ export default defineConfig({
             { label: 'Tasks', slug: 'core-concepts/tasks' },
             { label: 'PRD', slug: 'core-concepts/prd' },
             { label: 'Prompts', slug: 'core-concepts/prompts' },
+            { label: 'Agent Roles', slug: 'core-concepts/roles' },
           ],
         },
         {
@@ -44,11 +45,14 @@ export default defineConfig({
             { label: 'init', slug: 'commands/init' },
             { label: 'loop', slug: 'commands/loop' },
             { label: 'monitor', slug: 'commands/monitor' },
+            { label: 'show', slug: 'commands/show' },
+            { label: 'task', slug: 'commands/task' },
+            { label: 'review', slug: 'commands/review' },
+            { label: 'migrate', slug: 'commands/migrate' },
             { label: 'kill', slug: 'commands/kill' },
             { label: 'milestones', slug: 'commands/milestones' },
             { label: 'shas', slug: 'commands/shas' },
             { label: 'cost', slug: 'commands/cost' },
-            { label: 'update', slug: 'commands/update' },
           ],
         },
         {
@@ -67,6 +71,13 @@ export default defineConfig({
           items: [
             { label: 'Writing Tasks', slug: 'guides/writing-tasks' },
             { label: 'Customizing Prompts', slug: 'guides/customizing-prompts' },
+          ],
+        },
+        {
+          label: 'Reference',
+          items: [
+            { label: 'Task File API', slug: 'reference/task-file-api' },
+            { label: 'Extension API', slug: 'reference/extension-api' },
           ],
         },
       ],

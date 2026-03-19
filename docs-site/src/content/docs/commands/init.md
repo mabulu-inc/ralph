@@ -26,15 +26,15 @@ Ralph asks for:
 
 ## Generated Files
 
-| File                            | Purpose                                        |
-| ------------------------------- | ---------------------------------------------- |
-| `docs/PRD.md`                   | Skeleton PRD with numbered sections            |
-| `docs/RALPH-METHODOLOGY.md`    | Full methodology reference                     |
-| `docs/tasks/T-000.md`          | Infrastructure bootstrap task                  |
-| `docs/prompts/boot.md`         | Default boot prompt template                   |
-| `docs/prompts/rules.md`        | Project-specific rules (editable)              |
-| `ralph.config.json`            | Project configuration                          |
-| Agent instructions file         | Minimal stub (e.g., `.claude/CLAUDE.md`)       |
+| File                      | Purpose                                    |
+| ------------------------- | ------------------------------------------ |
+| `docs/PRD.md`             | Skeleton PRD with numbered sections        |
+| `docs/tasks/T-000.md`     | Infrastructure bootstrap task              |
+| `docs/prompts/rules.md`   | Project-specific rules (editable)          |
+| `ralph.config.json`       | Project configuration                      |
+| Agent instructions file    | Minimal stub (e.g., `.claude/CLAUDE.md`)   |
+
+Ralph's methodology, prompts, and role definitions live in the package code and are used directly at runtime — they are not copied into your project. This means you always get the latest version when you upgrade ralph. See [Customizing Prompts](/simplicity-ralph/guides/customizing-prompts/) for how to extend the built-in content.
 
 ## Behavior
 

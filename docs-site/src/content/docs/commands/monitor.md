@@ -30,6 +30,9 @@ The monitor shows:
   ```
   Activity: Bash (14s ago)
   ```
+- **Exit reason** — when the loop has stopped, shows why (all tasks done, max iterations reached, user interrupt, or error)
+
+Each iteration involves [9 specialized agent roles](/simplicity-ralph/core-concepts/roles/) collaborating through the phases. Role commentary (e.g., `[ROLE: Product Manager] ...`) appears in the "Last output" line when it is the most recent agent output.
 
 ## Options
 
