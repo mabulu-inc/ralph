@@ -27,6 +27,7 @@ import { run as runCost } from '../cost.js';
 import { run as runMilestones } from '../milestones.js';
 import { LoopGitService } from './git-service.js';
 import { scaleForComplexity, type LoopOptions } from './index.js';
+import type { ExitReason } from '../monitor.js';
 
 export class LoopOrchestrator {
   private readonly tasksDir: string;
@@ -84,7 +85,7 @@ export class LoopOrchestrator {
     }
   }
 
-  private async writeLoopStartSnapshot(): Promise<void> {
+  private async writeLoopStartSnapshot(): Promise<{ doneAtStart: number; total: number }> {
     const tasks = await scanTasks(this.tasksDir);
     const counts = countByStatus(tasks);
     const snapshot = {
@@ -93,15 +94,49 @@ export class LoopOrchestrator {
       startedAt: new Date().toISOString(),
     };
     await writeFile(join(this.logsDir, 'loop-start.json'), JSON.stringify(snapshot));
+    return { doneAtStart: counts.DONE, total: snapshot.total };
+  }
+
+  private async writeLoopEnd(
+    reason: ExitReason,
+    iterationsUsed: number,
+    loopSpend: number,
+    lastTaskId: string | null,
+  ): Promise<void> {
+    const tasks = await scanTasks(this.tasksDir);
+    const counts = countByStatus(tasks);
+    const snapshot = {
+      reason,
+      endedAt: new Date().toISOString(),
+      iterationsUsed,
+      iterationsLimit: this.opts.iterations,
+      totalSpend: loopSpend,
+      tasksCompleted: counts.DONE,
+      tasksRemaining: counts.TODO,
+      lastTaskId,
+    };
+    await writeFile(join(this.logsDir, 'loop-end.json'), JSON.stringify(snapshot));
+  }
+
+  private async writeLoopState(iteration: number, currentTaskId: string): Promise<void> {
+    const state = {
+      iteration,
+      iterationsLimit: this.opts.iterations,
+      currentTaskId,
+      startedAt: new Date().toISOString(),
+    };
+    await writeFile(join(this.logsDir, 'loop-state.json'), JSON.stringify(state));
   }
 
   private async executeLoop(
     config: Awaited<ReturnType<typeof readConfig>>,
     preflightBaseline = '',
   ): Promise<void> {
-    await this.writeLoopStartSnapshot();
+    const startSnapshot = await this.writeLoopStartSnapshot();
+    let snapshotTotal = startSnapshot.total;
 
     let lastFailedTaskId: string | undefined;
+    let lastTaskId: string | null = null;
     let loopSpend = 0;
 
     for (
@@ -111,9 +146,27 @@ export class LoopOrchestrator {
     ) {
       const tasks = await scanTasks(this.tasksDir);
       const counts = countByStatus(tasks);
+      const currentTotal = counts.DONE + counts.TODO;
+
+      if (currentTotal > snapshotTotal) {
+        const newCount = currentTotal - snapshotTotal;
+        console.log(
+          `[Iteration ${iteration}] detected ${newCount} new task${newCount === 1 ? '' : 's'} (total: ${currentTotal})`,
+        );
+        snapshotTotal = currentTotal;
+        try {
+          const startRaw = await readFile(join(this.logsDir, 'loop-start.json'), 'utf-8');
+          const startObj = JSON.parse(startRaw);
+          startObj.total = currentTotal;
+          await writeFile(join(this.logsDir, 'loop-start.json'), JSON.stringify(startObj));
+        } catch {
+          // best-effort update
+        }
+      }
 
       if (allDone(tasks)) {
-        console.log('All tasks are DONE');
+        console.log('Loop complete — all tasks done');
+        await this.writeLoopEnd('all_done', iteration - 1, loopSpend, lastTaskId);
         return;
       }
 
@@ -140,6 +193,7 @@ export class LoopOrchestrator {
             'No eligible task found (remaining tasks may be blocked or have unmet dependencies) (re-run with -v for details)',
           );
         }
+        await this.writeLoopEnd('no_eligible_tasks', iteration - 1, loopSpend, lastTaskId);
         return;
       }
 
@@ -160,6 +214,9 @@ export class LoopOrchestrator {
         console.log(`[Iteration ${iteration}] ${nextTask.id} BLOCKED: ${reason}`);
         continue;
       }
+
+      lastTaskId = nextTask.id;
+      await this.writeLoopState(iteration, nextTask.id);
 
       const scaling = scaleForComplexity(nextTask);
       const effectiveTimeout = this.opts.timeout > 0 ? this.opts.timeout : scaling.timeout;
@@ -259,6 +316,7 @@ export class LoopOrchestrator {
         console.log(
           `[Iteration ${iteration}] loop budget exceeded ($${loopSpend.toFixed(2)} >= $${config.maxLoopBudget.toFixed(2)}) — stopping`,
         );
+        await this.writeLoopEnd('budget_exceeded', iteration, loopSpend, lastTaskId);
         return;
       }
 
@@ -330,7 +388,12 @@ export class LoopOrchestrator {
       }
     }
 
-    console.log('Loop complete');
+    const finalTasks = await scanTasks(this.tasksDir);
+    const finalCounts = countByStatus(finalTasks);
+    console.log(
+      `Loop complete — iteration limit (${this.opts.iterations}) reached, ${finalCounts.TODO} TODO tasks remaining`,
+    );
+    await this.writeLoopEnd('iteration_limit', this.opts.iterations, loopSpend, lastTaskId);
   }
 
   private async checkBlockedSignal(logFile: string): Promise<string | null> {

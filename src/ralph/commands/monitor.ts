@@ -185,6 +185,31 @@ export interface LoopStartSnapshot {
   startedAt: string;
 }
 
+export type ExitReason =
+  | 'all_done'
+  | 'iteration_limit'
+  | 'budget_exceeded'
+  | 'no_eligible_tasks'
+  | 'user_interrupt';
+
+export interface LoopEndSnapshot {
+  reason: ExitReason;
+  endedAt: string;
+  iterationsUsed: number;
+  iterationsLimit: number;
+  totalSpend: number;
+  tasksCompleted: number;
+  tasksRemaining: number;
+  lastTaskId: string | null;
+}
+
+export interface LoopStateSnapshot {
+  iteration: number;
+  iterationsLimit: number;
+  currentTaskId: string;
+  startedAt: string;
+}
+
 export async function readLoopStartSnapshot(logsDir: string): Promise<LoopStartSnapshot | null> {
   try {
     const raw = await readFile(join(logsDir, 'loop-start.json'), 'utf-8');
@@ -195,6 +220,37 @@ export async function readLoopStartSnapshot(logsDir: string): Promise<LoopStartS
       typeof obj.startedAt === 'string'
     ) {
       return obj as LoopStartSnapshot;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function readLoopStateSnapshot(logsDir: string): Promise<LoopStateSnapshot | null> {
+  try {
+    const raw = await readFile(join(logsDir, 'loop-state.json'), 'utf-8');
+    const obj = JSON.parse(raw);
+    if (
+      typeof obj.iteration === 'number' &&
+      typeof obj.iterationsLimit === 'number' &&
+      typeof obj.currentTaskId === 'string' &&
+      typeof obj.startedAt === 'string'
+    ) {
+      return obj as LoopStateSnapshot;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function readLoopEndSnapshot(logsDir: string): Promise<LoopEndSnapshot | null> {
+  try {
+    const raw = await readFile(join(logsDir, 'loop-end.json'), 'utf-8');
+    const obj = JSON.parse(raw);
+    if (typeof obj.reason === 'string' && typeof obj.endedAt === 'string') {
+      return obj as LoopEndSnapshot;
     }
     return null;
   } catch {
@@ -465,6 +521,25 @@ export interface MonitorData {
   loopSpend?: number;
   taskSpend?: number;
   loopStartSnapshot?: LoopStartSnapshot;
+  iterationInfo?: { iteration: number; iterationsLimit: number };
+  exitReason?: LoopEndSnapshot;
+}
+
+function formatExitReason(end: LoopEndSnapshot): string {
+  switch (end.reason) {
+    case 'all_done':
+      return 'Stopped: all tasks completed';
+    case 'iteration_limit':
+      return `Stopped: iteration limit reached (${end.iterationsUsed}/${end.iterationsLimit}), ${end.tasksRemaining} tasks remaining`;
+    case 'budget_exceeded':
+      return `Stopped: budget exceeded ($${end.totalSpend.toFixed(2)}), ${end.tasksRemaining} tasks remaining`;
+    case 'no_eligible_tasks':
+      return `Stopped: no eligible tasks, ${end.tasksRemaining} tasks remaining`;
+    case 'user_interrupt':
+      return 'Stopped: user interrupt';
+    default:
+      return `Stopped: ${end.reason}`;
+  }
 }
 
 export function formatMonitorOutput(data: MonitorData): string {
@@ -479,6 +554,12 @@ export function formatMonitorOutput(data: MonitorData): string {
   // instead of letting them tick up from Date.now()
   const now = data.status === 'STOPPED' ? computeFrozenNow(data) : Date.now();
 
+  if (data.iterationInfo) {
+    const limit =
+      data.iterationInfo.iterationsLimit === 0 ? '∞' : String(data.iterationInfo.iterationsLimit);
+    lines.push(`Iteration: ${data.iterationInfo.iteration}/${limit}`);
+  }
+
   if (data.loopSpend !== undefined || data.taskSpend !== undefined) {
     const parts: string[] = [];
     if (data.loopSpend !== undefined) {
@@ -488,6 +569,10 @@ export function formatMonitorOutput(data: MonitorData): string {
       parts.push(`task $${data.taskSpend.toFixed(2)}`);
     }
     lines.push(`Spend: ${parts.join(' / ')}`);
+  }
+
+  if (data.status === 'STOPPED' && data.exitReason) {
+    lines.push(formatExitReason(data.exitReason));
   }
 
   if (data.currentTaskId) {
@@ -600,6 +685,20 @@ export async function collectMonitorData(
 
   const loopStartSnapshot = (await readLoopStartSnapshot(logsDir)) ?? undefined;
 
+  let iterationInfo: MonitorData['iterationInfo'];
+  const loopState = await readLoopStateSnapshot(logsDir);
+  if (loopState) {
+    iterationInfo = {
+      iteration: loopState.iteration,
+      iterationsLimit: loopState.iterationsLimit,
+    };
+  }
+
+  let exitReason: LoopEndSnapshot | undefined;
+  if (status === 'STOPPED') {
+    exitReason = (await readLoopEndSnapshot(logsDir)) ?? undefined;
+  }
+
   return {
     status,
     done: counts.DONE,
@@ -613,6 +712,8 @@ export async function collectMonitorData(
     loopSpend,
     taskSpend,
     loopStartSnapshot,
+    iterationInfo,
+    exitReason,
   };
 }
 

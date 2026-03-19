@@ -347,7 +347,7 @@ describe('run', () => {
     await run([], tmpDir);
 
     const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
-    expect(output).toContain('All tasks are DONE');
+    expect(output).toContain('all tasks done');
   });
 
   it('exits when no eligible task found', async () => {

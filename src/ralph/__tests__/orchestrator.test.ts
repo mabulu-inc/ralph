@@ -154,7 +154,7 @@ describe('LoopOrchestrator', () => {
     await orchestrator.execute();
 
     const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
-    expect(output).toContain('All tasks are DONE');
+    expect(output).toContain('all tasks done');
   });
 
   it('exits when no eligible task found', async () => {
@@ -1228,5 +1228,184 @@ describe('LoopOrchestrator', () => {
     const secondCallArgs = spawnWithCapture.mock.calls[1][1] as string[];
     const allArgs = secondCallArgs.join(' ');
     expect(allArgs).toContain('Green');
+  });
+
+  it('writes loop-end.json with reason "iteration_limit" when loop exhausts iterations', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 1, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 1 }));
+    await orchestrator.execute();
+
+    const endPath = join(tmpDir, '.ralph-logs', 'loop-end.json');
+    const raw = await readFile(endPath, 'utf-8');
+    const endSnapshot = JSON.parse(raw);
+    expect(endSnapshot.reason).toBe('iteration_limit');
+    expect(endSnapshot.iterationsUsed).toBe(1);
+    expect(endSnapshot.iterationsLimit).toBe(1);
+    expect(typeof endSnapshot.endedAt).toBe('string');
+    expect(typeof endSnapshot.totalSpend).toBe('number');
+    expect(typeof endSnapshot.tasksRemaining).toBe('number');
+  });
+
+  it('writes loop-end.json with reason "all_done" when all tasks complete', async () => {
+    const doneTask = TODO_TASK.replace('TODO', 'DONE');
+    await setupProject(doneTask);
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const endPath = join(tmpDir, '.ralph-logs', 'loop-end.json');
+    const raw = await readFile(endPath, 'utf-8');
+    const endSnapshot = JSON.parse(raw);
+    expect(endSnapshot.reason).toBe('all_done');
+  });
+
+  it('writes loop-end.json with reason "no_eligible_tasks" when no eligible task found', async () => {
+    await mkdir(join(tmpDir, 'docs', 'tasks'), { recursive: true });
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await mkdir(join(tmpDir, '.claude'), { recursive: true });
+    await writeFile(join(tmpDir, '.claude', 'CLAUDE.md'), CLAUDE_MD);
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}: {{task.title}}\n{{retryContext}}',
+    );
+    await writeFile(
+      join(tmpDir, 'docs', 'tasks', 'T-002.md'),
+      `# T-002: Blocked task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: T-001\n- **PRD Reference**: §1\n\n## Description\n\nA blocked task.\n`,
+    );
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const endPath = join(tmpDir, '.ralph-logs', 'loop-end.json');
+    const raw = await readFile(endPath, 'utf-8');
+    const endSnapshot = JSON.parse(raw);
+    expect(endSnapshot.reason).toBe('no_eligible_tasks');
+  });
+
+  it('writes loop-end.json with reason "budget_exceeded" when budget is exceeded', async () => {
+    resetRegistry();
+    resetProviderInit();
+
+    await mkdir(join(tmpDir, 'docs', 'tasks'), { recursive: true });
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'ralph.config.json'),
+      JSON.stringify({
+        language: 'TypeScript',
+        packageManager: 'pnpm',
+        testingFramework: 'Vitest',
+        qualityCheck: 'pnpm check',
+        testCommand: 'pnpm test',
+        maxLoopBudget: 0.01,
+      }),
+    );
+    await writeFile(join(tmpDir, 'docs', 'tasks', 'T-001.md'), TODO_TASK);
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'boot.md'),
+      'Task {{task.id}}: {{task.title}}\nConfig: {{config.language}}\n{{retryContext}}',
+    );
+
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+    spawnWithCapture.mockImplementation((_cmd, _args, opts) => {
+      const logFile = (opts as { logFile?: string }).logFile;
+      if (logFile) {
+        const expensiveLog = JSON.stringify({
+          type: 'result',
+          usage: {
+            input_tokens: 1_000_000,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
+            output_tokens: 1_000_000,
+          },
+        });
+        writeFileSync(logFile, expensiveLog + '\n');
+      }
+      return { pid: 12345, stdout: null, stderr: null } as unknown as ReturnType<
+        typeof processModule.spawnWithCapture
+      >;
+    });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 5 }));
+    await orchestrator.execute();
+
+    const endPath = join(tmpDir, '.ralph-logs', 'loop-end.json');
+    const raw = await readFile(endPath, 'utf-8');
+    const endSnapshot = JSON.parse(raw);
+    expect(endSnapshot.reason).toBe('budget_exceeded');
+  });
+
+  it('prints reason-specific exit message for iteration limit', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 1, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 1 }));
+    await orchestrator.execute();
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('iteration limit');
+    expect(output).toContain('TODO tasks remaining');
+  });
+
+  it('writes loop-state.json at each iteration with current iteration info', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 1 }));
+    await orchestrator.execute();
+
+    const statePath = join(tmpDir, '.ralph-logs', 'loop-state.json');
+    const raw = await readFile(statePath, 'utf-8');
+    const state = JSON.parse(raw);
+    expect(state.iteration).toBe(1);
+    expect(state.iterationsLimit).toBe(1);
+    expect(state.currentTaskId).toBe('T-001');
+    expect(typeof state.startedAt).toBe('string');
+  });
+
+  it('detects new tasks added during the loop and logs a notice', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+    mockChildProcess();
+
+    // First iteration succeeds (task done), second iteration finds new tasks
+    monitorProcess
+      .mockResolvedValueOnce({ exitCode: 0, timedOut: false })
+      .mockResolvedValueOnce({ exitCode: 0, timedOut: false });
+    getHeadSha.mockResolvedValueOnce('aaa1111').mockResolvedValueOnce('bbb2222');
+
+    // After first iteration completes, add a new task file
+    spawnWithCapture.mockImplementation((_cmd, _args, opts) => {
+      const logFile = (opts as { logFile?: string }).logFile;
+      if (logFile) {
+        writeFileSync(logFile, '{}');
+      }
+      // After first call, add a new task
+      if (spawnWithCapture.mock.calls.length === 1) {
+        const newTask = `# T-002: New task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nNew.\n`;
+        writeFileSync(join(tmpDir, 'docs', 'tasks', 'T-002.md'), newTask);
+      }
+      return { pid: 12345, stdout: null, stderr: null } as unknown as ReturnType<
+        typeof processModule.spawnWithCapture
+      >;
+    });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts({ iterations: 2 }));
+    await orchestrator.execute();
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(output).toContain('detected');
+    expect(output).toContain('new task');
   });
 });

@@ -23,6 +23,8 @@ import {
   scanLogForPhases,
   formatElapsed,
   readLoopStartSnapshot,
+  readLoopStateSnapshot,
+  readLoopEndSnapshot,
   formatRunProgress,
   type RunResult,
   type PhaseTimestamp,
@@ -1358,5 +1360,340 @@ describe('collectMonitorData reads loop-start snapshot', () => {
     const data = await collectMonitorData(tasksDir, logsDir);
     expect(data).not.toBeNull();
     expect(data!.loopStartSnapshot).toBeUndefined();
+  });
+});
+
+describe('readLoopStateSnapshot', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ralph-state-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads a valid loop-state.json file', async () => {
+    const state = {
+      iteration: 5,
+      iterationsLimit: 10,
+      currentTaskId: 'T-042',
+      startedAt: '2026-03-10T12:00:00Z',
+    };
+    await writeFile(join(dir, 'loop-state.json'), JSON.stringify(state));
+
+    const result = await readLoopStateSnapshot(dir);
+    expect(result).toEqual(state);
+  });
+
+  it('returns null when file does not exist', async () => {
+    const result = await readLoopStateSnapshot(dir);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for invalid JSON', async () => {
+    await writeFile(join(dir, 'loop-state.json'), 'not json');
+    const result = await readLoopStateSnapshot(dir);
+    expect(result).toBeNull();
+  });
+});
+
+describe('readLoopEndSnapshot', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ralph-end-test-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reads a valid loop-end.json file', async () => {
+    const end = {
+      reason: 'iteration_limit',
+      endedAt: '2026-03-10T13:00:00Z',
+      iterationsUsed: 10,
+      iterationsLimit: 10,
+      totalSpend: 5.42,
+      tasksCompleted: 7,
+      tasksRemaining: 13,
+      lastTaskId: 'T-042',
+    };
+    await writeFile(join(dir, 'loop-end.json'), JSON.stringify(end));
+
+    const result = await readLoopEndSnapshot(dir);
+    expect(result).toEqual(end);
+  });
+
+  it('returns null when file does not exist', async () => {
+    const result = await readLoopEndSnapshot(dir);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for invalid JSON', async () => {
+    await writeFile(join(dir, 'loop-end.json'), 'not json');
+    const result = await readLoopEndSnapshot(dir);
+    expect(result).toBeNull();
+  });
+});
+
+describe('formatMonitorOutput with iteration info', () => {
+  it('shows iteration info when iterationInfo is present', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 5,
+      total: 20,
+      currentTaskId: 'T-006',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      iterationInfo: { iteration: 5, iterationsLimit: 10 },
+    });
+    expect(output).toContain('Iteration: 5/10');
+  });
+
+  it('shows infinity symbol for unlimited iterations', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 5,
+      total: 20,
+      currentTaskId: 'T-006',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      iterationInfo: { iteration: 3, iterationsLimit: 0 },
+    });
+    expect(output).toMatch(/Iteration: 3\/∞/);
+  });
+
+  it('does not show iteration line when iterationInfo is undefined', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 5,
+      total: 20,
+      currentTaskId: 'T-006',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+    });
+    expect(output).not.toContain('Iteration:');
+  });
+});
+
+describe('formatMonitorOutput with exit reason', () => {
+  it('shows exit reason when STOPPED and exitReason is present', () => {
+    const output = formatMonitorOutput({
+      status: 'STOPPED',
+      done: 7,
+      total: 20,
+      currentTaskId: 'T-008',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      exitReason: {
+        reason: 'iteration_limit',
+        endedAt: '2026-03-10T13:00:00Z',
+        iterationsUsed: 10,
+        iterationsLimit: 10,
+        totalSpend: 5.42,
+        tasksCompleted: 7,
+        tasksRemaining: 13,
+        lastTaskId: 'T-008',
+      },
+    });
+    expect(output).toContain('Stopped: iteration limit reached (10/10), 13 tasks remaining');
+  });
+
+  it('shows all_done exit reason', () => {
+    const output = formatMonitorOutput({
+      status: 'STOPPED',
+      done: 20,
+      total: 20,
+      currentTaskId: null,
+      currentTaskTitle: null,
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      exitReason: {
+        reason: 'all_done',
+        endedAt: '2026-03-10T13:00:00Z',
+        iterationsUsed: 8,
+        iterationsLimit: 10,
+        totalSpend: 3.0,
+        tasksCompleted: 20,
+        tasksRemaining: 0,
+        lastTaskId: 'T-020',
+      },
+    });
+    expect(output).toContain('Stopped: all tasks completed');
+  });
+
+  it('shows budget_exceeded exit reason', () => {
+    const output = formatMonitorOutput({
+      status: 'STOPPED',
+      done: 5,
+      total: 20,
+      currentTaskId: 'T-006',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      exitReason: {
+        reason: 'budget_exceeded',
+        endedAt: '2026-03-10T13:00:00Z',
+        iterationsUsed: 5,
+        iterationsLimit: 10,
+        totalSpend: 50.0,
+        tasksCompleted: 5,
+        tasksRemaining: 15,
+        lastTaskId: 'T-006',
+      },
+    });
+    expect(output).toContain('Stopped: budget exceeded');
+    expect(output).toContain('$50.00');
+  });
+
+  it('shows no_eligible_tasks exit reason', () => {
+    const output = formatMonitorOutput({
+      status: 'STOPPED',
+      done: 5,
+      total: 20,
+      currentTaskId: null,
+      currentTaskTitle: null,
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      exitReason: {
+        reason: 'no_eligible_tasks',
+        endedAt: '2026-03-10T13:00:00Z',
+        iterationsUsed: 3,
+        iterationsLimit: 10,
+        totalSpend: 2.0,
+        tasksCompleted: 5,
+        tasksRemaining: 15,
+        lastTaskId: null,
+      },
+    });
+    expect(output).toContain('Stopped: no eligible tasks');
+  });
+
+  it('does not show exit reason when not STOPPED', () => {
+    const output = formatMonitorOutput({
+      status: 'RUNNING',
+      done: 5,
+      total: 20,
+      currentTaskId: 'T-006',
+      currentTaskTitle: 'Some task',
+      phaseTimestamps: [],
+      lastLogLine: null,
+      lastOutputTimestamp: null,
+      lastActivity: null,
+      exitReason: {
+        reason: 'iteration_limit',
+        endedAt: '2026-03-10T13:00:00Z',
+        iterationsUsed: 10,
+        iterationsLimit: 10,
+        totalSpend: 5.42,
+        tasksCompleted: 5,
+        tasksRemaining: 15,
+        lastTaskId: 'T-006',
+      },
+    });
+    expect(output).not.toContain('Stopped:');
+  });
+});
+
+describe('collectMonitorData reads loop-state and loop-end', () => {
+  let dir: string;
+  let logsDir: string;
+  let tasksDir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'ralph-monitor-state-'));
+    logsDir = join(dir, '.ralph-logs');
+    tasksDir = join(dir, 'docs', 'tasks');
+    await mkdir(logsDir, { recursive: true });
+    await mkdir(tasksDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('includes iterationInfo when loop-state.json exists', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nPending.\n`,
+    );
+    const state = {
+      iteration: 3,
+      iterationsLimit: 10,
+      currentTaskId: 'T-001',
+      startedAt: '2026-03-10T12:00:00Z',
+    };
+    await writeFile(join(logsDir, 'loop-state.json'), JSON.stringify(state));
+
+    const data = await collectMonitorData(tasksDir, logsDir);
+    expect(data).not.toBeNull();
+    expect(data!.iterationInfo).toEqual({ iteration: 3, iterationsLimit: 10 });
+  });
+
+  it('includes exitReason when STOPPED and loop-end.json exists', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nPending.\n`,
+    );
+    const end = {
+      reason: 'iteration_limit',
+      endedAt: '2026-03-10T13:00:00Z',
+      iterationsUsed: 10,
+      iterationsLimit: 10,
+      totalSpend: 5.42,
+      tasksCompleted: 7,
+      tasksRemaining: 13,
+      lastTaskId: 'T-042',
+    };
+    await writeFile(join(logsDir, 'loop-end.json'), JSON.stringify(end));
+
+    const data = await collectMonitorData(tasksDir, logsDir);
+    expect(data).not.toBeNull();
+    expect(data!.exitReason).toEqual(end);
+  });
+
+  it('does not include exitReason when RUNNING', async () => {
+    await writeFile(
+      join(tasksDir, 'T-001.md'),
+      `# T-001: First task\n\n- **Status**: TODO\n- **Milestone**: 1 — Setup\n- **Depends**: none\n- **PRD Reference**: §1\n\n## Description\n\nPending.\n`,
+    );
+    // Write a pid file to make status RUNNING
+    await writeFile(join(logsDir, 'ralph.pid'), String(process.pid));
+    const end = {
+      reason: 'iteration_limit',
+      endedAt: '2026-03-10T13:00:00Z',
+      iterationsUsed: 10,
+      iterationsLimit: 10,
+      totalSpend: 5.42,
+      tasksCompleted: 7,
+      tasksRemaining: 13,
+      lastTaskId: 'T-042',
+    };
+    await writeFile(join(logsDir, 'loop-end.json'), JSON.stringify(end));
+
+    const data = await collectMonitorData(tasksDir, logsDir);
+    expect(data).not.toBeNull();
+    expect(data!.exitReason).toBeUndefined();
   });
 });
