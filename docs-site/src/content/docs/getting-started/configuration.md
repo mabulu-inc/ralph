@@ -32,7 +32,6 @@ Ralph reads configuration from `ralph.config.json` at the project root.
 | Field        | Description                                           | Example              |
 | ------------ | ----------------------------------------------------- | -------------------- |
 | `model`      | Model override (otherwise uses agent default)         | `claude-sonnet-4-5-20250514` |
-| `database`   | Database setup details                                | `PostgreSQL`         |
 | `fileNaming` | File naming convention                                | `kebab-case`         |
 
 ## Supported Agents

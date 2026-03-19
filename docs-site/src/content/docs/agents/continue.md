@@ -5,11 +5,7 @@ description: Setup and configuration for Continue with ralph.
 
 ## Prerequisites
 
-Install the Continue CLI:
-
-```bash
-npm install -g @anthropic-ai/continue-cli
-```
+Install Continue following the [official Continue documentation](https://docs.continue.dev/getting-started/install).
 
 ## Configuration
 
@@ -31,6 +27,6 @@ cn -p "<boot prompt>" --output-format stream-json --max-turns N
 - `--output-format stream-json` — structured JSONL output
 - `--max-turns` — supported, limits agent turns
 
-## Instructions File
+## Agent Instructions
 
-Continue uses `~/.continue/config.yaml` for configuration.
+Ralph's loop prompt is self-contained — it does not depend on or manage `~/.continue/config.yaml` or any other agent-specific instructions file. All methodology content, roles, and behavioral rules are injected directly into the agent session.

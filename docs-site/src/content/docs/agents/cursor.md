@@ -27,6 +27,6 @@ cursor -p "<boot prompt>" --output-format stream-json
 - `--output-format stream-json` — structured JSONL output
 - No `--max-turns` support — ralph uses its timeout mechanism
 
-## Instructions File
+## Agent Instructions
 
-Cursor uses `.cursor/rules/` directory for project-level rules. Ralph generates a rules file during `init`.
+Ralph's loop prompt is self-contained — it does not generate or manage `.cursor/rules/` or any other agent-specific instructions file. All methodology content, roles, and behavioral rules are injected directly into the agent session.

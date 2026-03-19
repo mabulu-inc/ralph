@@ -7,13 +7,13 @@ Ralph supports multiple AI coding agents through a provider abstraction. Each pr
 
 ## Supported Agents
 
-| Agent          | Binary   | Print Mode        | JSON Output                   | Max Turns       | Instructions File         |
-| -------------- | -------- | ----------------- | ----------------------------- | --------------- | ------------------------- |
-| **Claude Code** | `claude` | `-p`              | `--output-format stream-json` | `--max-turns N` | `.claude/CLAUDE.md`       |
-| **Gemini CLI** | `gemini` | `-p`              | `--output-format stream-json` | N/A             | `GEMINI.md`               |
-| **Codex CLI**  | `codex`  | `exec` subcommand | `--json`                      | N/A             | `AGENTS.md`               |
-| **Continue**   | `cn`     | `-p`              | `--output-format stream-json` | `--max-turns N` | `~/.continue/config.yaml` |
-| **Cursor**     | `cursor` | `-p`              | `--output-format stream-json` | N/A             | `.cursor/rules/`          |
+| Agent          | Binary   | Print Mode        | JSON Output                   | Max Turns       |
+| -------------- | -------- | ----------------- | ----------------------------- | --------------- |
+| **Claude Code** | `claude` | `-p`              | `--output-format stream-json` | `--max-turns N` |
+| **Gemini CLI** | `gemini` | `-p`              | `--output-format stream-json` | N/A             |
+| **Codex CLI**  | `codex`  | `exec` subcommand | `--json`                      | N/A             |
+| **Continue**   | `cn`     | `-p`              | `--output-format stream-json` | `--max-turns N` |
+| **Cursor**     | `cursor` | `-p`              | `--output-format stream-json` | N/A             |
 
 ## Provider Interface
 
@@ -25,7 +25,7 @@ Every provider supplies:
 | **buildArgs(prompt, options)** | Construct the argument array for a headless invocation   |
 | **outputFormat**               | How to request structured output                         |
 | **supportsMaxTurns**           | Whether the agent accepts a max-turns limit              |
-| **instructionsFile**           | Path to the agent's project-level instructions file      |
+| **supportsSystemPrompt**       | Whether the agent accepts a system prompt via CLI        |
 | **parseOutput(stream)**        | Normalize output into ralph's internal event format      |
 
 ## Choosing an Agent

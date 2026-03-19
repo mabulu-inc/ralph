@@ -36,10 +36,8 @@ Implementation guidance — patterns to follow, helpers to reuse, pitfalls to av
 | Status        | Meaning                                        |
 | ------------- | ---------------------------------------------- |
 | `TODO`        | Ready to be picked up (if dependencies are met) |
-| `IN-PROGRESS` | Currently being worked on by an agent          |
 | `DONE`        | Completed and committed                        |
 | `BLOCKED`     | Cannot proceed (has a `## Blocked` section)     |
-| `SKIPPED`     | Intentionally skipped                          |
 
 ## Task Eligibility
 

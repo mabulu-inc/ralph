@@ -37,6 +37,6 @@ claude -p "<boot prompt>" --output-format stream-json --max-turns N --model <mod
 - `--max-turns` — limits agent turns based on task complexity
 - `--model` — optional model override
 
-## Instructions File
+## Agent Instructions
 
-Ralph generates `.claude/CLAUDE.md` during `init` with a project goal and methodology pointer. Behavioral rules flow through the boot prompt, not this file.
+Ralph's loop prompt is self-contained — it does not generate or manage `.claude/CLAUDE.md` or any other agent-specific instructions file. All methodology content, roles, and behavioral rules are injected directly into the agent session.
