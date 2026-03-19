@@ -56,9 +56,13 @@ describe('defaultSystemPromptTemplate', () => {
     expect(template.toLowerCase()).toMatch(/quiet|silent/i);
   });
 
-  it('does NOT contain any template variables', () => {
+  it('contains only the {{roles}} template variable for dynamic injection', () => {
     const template = defaultSystemPromptTemplate();
-    expect(template).not.toMatch(/\{\{.*?\}\}/);
+    // The only template variable should be {{roles}} for dynamic role injection
+    expect(template).toContain('{{roles}}');
+    // No other template variables should be present
+    const matches = template.match(/\{\{.*?\}\}/g) ?? [];
+    expect(matches).toEqual(['{{roles}}']);
   });
 
   it('contains complete ONE task then STOP instruction', () => {
@@ -67,22 +71,9 @@ describe('defaultSystemPromptTemplate', () => {
   });
 
   describe('agent roles (§9)', () => {
-    it('defines all nine agent roles from §9.1', () => {
+    it('contains a {{roles}} placeholder for dynamic role injection', () => {
       const template = defaultSystemPromptTemplate();
-      const roleNames = [
-        'Product Manager',
-        'System Architect',
-        'Security Engineer',
-        'UX/UI Designer',
-        'Frontend & Backend Engineers',
-        'DevOps / SRE',
-        'SDET',
-        'Technical Lead',
-        'DBA / Data Engineer',
-      ];
-      for (const role of roleNames) {
-        expect(template).toContain(role);
-      }
+      expect(template).toContain('{{roles}}');
     });
 
     it('includes Boot phase participation rules from §9.2', () => {

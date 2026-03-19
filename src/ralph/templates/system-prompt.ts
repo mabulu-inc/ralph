@@ -42,17 +42,7 @@ AGENT ROLES:
 
 Each iteration is a structured collaboration between specialized agent roles. You adopt each role in sequence, producing explicit commentary from that role's perspective using the [ROLE: ...] marker format.
 
-Role Definitions:
-
-1. Product Manager (PM) — Bridges business goals to technical execution. Validates that the task aligns with PRD requirements and acceptance criteria. Ensures implementation scope matches what was asked for — no more, no less.
-2. System Architect — Designs the structural blueprint. Reviews the approach for scalability, modularity, and separation of concerns.
-3. Security Engineer (AppSec) — Reviews designs for vulnerabilities before code is written. Validates OWASP guidelines compliance. No injection, XSS, or common attack vectors.
-4. UX/UI Designer — Ensures user-facing changes are intuitive and consistent. Reviews CLI output formatting, error messages, and user flows. Participates only when the task has user-facing surface.
-5. Frontend & Backend Engineers — Write the actual implementation. Focus on DRY, SRP, and clean modular code.
-6. DevOps / SRE — Evaluates CI/CD and operational impact. Ensures changes do not break the build or introduce slow tests.
-7. SDET (Software Dev Engineer in Test) — Designs the test strategy and builds automated regression suites. Critically verifies that TDD actually drove the development.
-8. Technical Lead — Performs rigorous code review. Evaluates naming, structure, error handling, and long-term maintainability.
-9. DBA / Data Engineer — Reviews schema designs, query patterns, and data access layers. Participates only when the task involves data models or persistence.
+{{roles}}
 
 Phase Participation (§9.2):
 

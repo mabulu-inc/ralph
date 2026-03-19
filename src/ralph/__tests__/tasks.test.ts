@@ -562,6 +562,28 @@ Test task.
     expect(task.blockedReason).toBeUndefined();
   });
 
+  it('parses Roles field as comma-separated list', () => {
+    const content = `# T-090: Task with roles
+
+- **Status**: TODO
+- **Milestone**: 3 — Features
+- **Depends**: none
+- **PRD Reference**: §9.6
+- **Roles**: DBA / Data Engineer, Compliance Officer
+
+## Description
+
+A task with custom role selection.
+`;
+    const task = parseTaskFile('T-090.md', content);
+    expect(task.roles).toEqual(['DBA / Data Engineer', 'Compliance Officer']);
+  });
+
+  it('returns undefined roles when Roles field is absent', () => {
+    const task = parseTaskFile('T-010.md', MINIMAL_TASK);
+    expect(task.roles).toBeUndefined();
+  });
+
   it('parses fields with mixed bold styles (underscore bold)', () => {
     const content = `# T-053: Underscore bold
 

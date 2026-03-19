@@ -6,6 +6,13 @@ import { extractPrdSections } from './prd-extractor.js';
 import { generateCodebaseIndex } from './codebase-index.js';
 import { defaultBootPromptTemplate } from '../templates/boot-prompt.js';
 import { defaultSystemPromptTemplate } from '../templates/system-prompt.js';
+import {
+  BUILT_IN_ROLES,
+  parseRolesFile,
+  mergeRoles,
+  filterRolesForTask,
+  formatRolesForPrompt,
+} from './roles.js';
 
 export function interpolateTemplate(
   template: string,
@@ -129,7 +136,22 @@ export async function loadLayeredPrompt(
   const extensionPath = join(projectDir, 'docs', 'prompts', 'system.md');
   const extension = await readExtensionFile(extensionPath, builtInSystem);
 
-  const systemPrompt = extension ? appendExtension(builtInSystem, extension) : builtInSystem;
+  let systemPrompt = extension ? appendExtension(builtInSystem, extension) : builtInSystem;
+
+  // Load and merge roles
+  let rolesContent = '';
+  try {
+    rolesContent = await readFile(join(projectDir, 'docs', 'prompts', 'roles.md'), 'utf-8');
+  } catch {
+    // roles.md doesn't exist — use built-in roles only
+  }
+
+  const customizations = parseRolesFile(rolesContent);
+  const mergedRoles = mergeRoles(BUILT_IN_ROLES, customizations);
+  const activeRoles = filterRolesForTask(mergedRoles, task.roles);
+  const rolesText = formatRolesForPrompt(activeRoles);
+
+  systemPrompt = systemPrompt.replace('{{roles}}', rolesText);
 
   const userPrompt = await loadAndInterpolate(
     projectDir,

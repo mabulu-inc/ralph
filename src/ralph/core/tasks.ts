@@ -27,6 +27,7 @@ export interface Task {
   complexity: ComplexityTier | undefined;
   blocked: boolean;
   blockedReason: string | undefined;
+  roles: string[] | undefined;
   description: string;
   producesCount: number;
 }
@@ -45,6 +46,13 @@ function parseComplexity(raw: string | undefined): ComplexityTier | undefined {
   if (!raw) return undefined;
   const normalized = raw.trim().toLowerCase();
   return VALID_COMPLEXITY_TIERS.has(normalized) ? (normalized as ComplexityTier) : undefined;
+}
+
+function parseRoles(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0);
 }
 
 const NO_DEPS_VARIANTS = new Set(['none', '(none)', '—', '–', '-']);
@@ -81,6 +89,8 @@ export function parseTaskFile(filename: string, content: string): Task {
   const producesCount = countListItemsInSection(tree, 'Produces');
   const complexityRaw = extractFieldFromAst(tree, 'Complexity');
   const complexity = parseComplexity(complexityRaw);
+  const rolesRaw = extractFieldFromAst(tree, 'Roles');
+  const roles = rolesRaw ? parseRoles(rolesRaw) : undefined;
 
   return {
     id,
@@ -98,6 +108,7 @@ export function parseTaskFile(filename: string, content: string): Task {
     complexity,
     blocked,
     blockedReason,
+    roles,
     description,
     producesCount,
   };

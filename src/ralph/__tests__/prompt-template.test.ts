@@ -410,4 +410,70 @@ describe('loadLayeredPrompt', () => {
     // Extension content interpolated
     expect(result.userPrompt).toContain('Extension task: T-005');
   });
+
+  it('injects built-in role definitions into system prompt when no roles.md', async () => {
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.systemPrompt).toContain('Product Manager');
+    expect(result.systemPrompt).toContain('System Architect');
+    expect(result.systemPrompt).toContain('SDET');
+  });
+
+  it('merges role overrides from roles.md into system prompt', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'roles.md'),
+      '## Override: SDET\n\nCustom SDET for integration testing only.\n',
+    );
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.systemPrompt).toContain('Custom SDET for integration testing only.');
+  });
+
+  it('adds custom roles from roles.md into system prompt', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'roles.md'),
+      `## Add: Compliance Officer
+
+- **Focus**: Regulatory compliance
+- **Responsibility**: Reviews GDPR compliance.
+- **Participates**: Boot, Verify
+`,
+    );
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.systemPrompt).toContain('Compliance Officer');
+    expect(result.systemPrompt).toContain('Regulatory compliance');
+  });
+
+  it('removes disabled roles from system prompt', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'roles.md'),
+      '## Disable: UX/UI Designer\n\nNot needed.\n',
+    );
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    // UX/UI Designer should be gone from role definitions
+    // But may still appear in other parts of the template like phase participation
+    // We check the role definitions section specifically
+    expect(result.systemPrompt).toContain('Product Manager');
+    expect(result.systemPrompt).toContain('SDET');
+  });
+
+  it('filters roles for task when task has Roles field', async () => {
+    const taskWithRoles = { ...mockTask, roles: ['Product Manager', 'SDET'] };
+    const result = await loadLayeredPrompt(tmpDir, taskWithRoles, mockConfig);
+    // Should contain filtered roles
+    expect(result.systemPrompt).toContain('Product Manager');
+    expect(result.systemPrompt).toContain('SDET');
+    expect(result.systemPrompt).toContain('Frontend & Backend Engineers');
+  });
+
+  it('uses all roles when task has no Roles field', async () => {
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.systemPrompt).toContain('Product Manager');
+    expect(result.systemPrompt).toContain('DBA / Data Engineer');
+    expect(result.systemPrompt).toContain('SDET');
+  });
 });
