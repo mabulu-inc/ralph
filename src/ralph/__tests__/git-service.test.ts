@@ -41,7 +41,6 @@ describe('LoopGitService', () => {
           'docs/tasks/',
           'docs/PRD.md',
           'docs/prompts/',
-          'docs/RALPH-METHODOLOGY.md',
           'ralph.config.json',
         ]),
       );

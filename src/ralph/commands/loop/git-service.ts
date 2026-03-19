@@ -20,13 +20,7 @@ export interface ShaResult {
   error?: string;
 }
 
-const PROTECTED_PATHS = [
-  'docs/tasks/',
-  'docs/PRD.md',
-  'docs/prompts/',
-  'docs/RALPH-METHODOLOGY.md',
-  'ralph.config.json',
-];
+const PROTECTED_PATHS = ['docs/tasks/', 'docs/PRD.md', 'docs/prompts/', 'ralph.config.json'];
 
 export class LoopGitService {
   constructor(private readonly projectDir: string) {}
