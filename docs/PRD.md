@@ -6,6 +6,8 @@ Any project can `npx @smplcty/ralph init` to bootstrap, then `ralph loop` to bui
 
 ## 1. Task File Format
 
+> **Public API** — The task file format is a stable contract. See §12.2 for the full field reference and backward-compatibility guarantees.
+
 Ralph's unit of work is a **task file** (`docs/tasks/T-NNN.md`). Each file has:
 
 ```markdown
@@ -18,6 +20,7 @@ Ralph's unit of work is a **task file** (`docs/tasks/T-NNN.md`). Each file has:
 - **Complexity**: light | standard | heavy (optional — overrides auto-detection; see §1.3)
 - **Touches**: `path/to/file.ts`, `path/to/other.ts` (optional — files the task will read or modify)
 - **Model**: (optional — overrides project default, e.g., `claude-opus-4-20250514`)
+- **Roles**: DBA, Compliance Officer (optional — restricts active roles; see §9.6)
 - **Completed**: YYYY-MM-DD HH:MM (Nm duration)
 - **Commit**: <SHA>
 - **Cost**: $N.NN
@@ -26,15 +29,21 @@ Ralph's unit of work is a **task file** (`docs/tasks/T-NNN.md`). Each file has:
 
 What to implement and why.
 
+## AC
+
+Acceptance criteria.
+
 ## Hints
 
-(Optional) Implementation guidance for the agent — e.g., which existing patterns to follow, which helpers to reuse, known pitfalls to avoid. Included verbatim in the boot prompt to reduce exploration time.
+(Optional) Implementation guidance for the agent — sent as a separate prompt variable.
 
 ## Produces
 
 - `path/to/file.ts`
 - Tests
 ```
+
+All sections except Hints, Produces, Completion Notes, and Blocked are included in the task body sent to the agent. Users may add any custom sections (e.g., `## Security Considerations`, `## Migration Plan`) and they will reach the agent automatically. Run `ralph show task T-NNN` to verify. Use `ralph task` (§3.10) to scaffold a new task file.
 
 ### 1.1 Task Eligibility
 
@@ -109,14 +118,12 @@ Interactive project bootstrapper. Prompts for project configuration, then create
 **Creates:**
 
 - `docs/PRD.md` — skeleton PRD with numbered sections to fill in
-- `docs/RALPH-METHODOLOGY.md` — full methodology reference
 - `docs/tasks/T-000.md` — infrastructure bootstrap task
-- `docs/prompts/boot.md` — the default boot prompt template (see §5)
-- `docs/prompts/system.md` — stable system-level prompt layer (see §5.7)
-- `docs/prompts/rules.md` — user-editable project-specific rules included in the boot prompt (see §5.9)
-- `docs/prompts/README.md` — explains the prompt directory structure
+- `docs/prompts/rules.md` — user-editable project-specific rules included in the boot prompt (see §5.10)
 - `ralph.config.json` — project configuration including agent selection
 - Agent instructions file (e.g., `.claude/CLAUDE.md`, `GEMINI.md`, `AGENTS.md`) — minimal stub with project goal and methodology pointer (no config duplication)
+
+All methodology content, prompt templates, and role definitions live in ralph's package code and are used directly at runtime — they are never copied into the user's project. See §5 for the built-in-first prompt architecture.
 
 **Behavior:**
 
@@ -132,11 +139,11 @@ The main AI development loop. Runs the configured AI coding agent in stateless i
 
 **Iteration cycle:**
 
-1. **Pre-flight** — verify the configured agent CLI is installed and on PATH, `docs/tasks/` exists, `docs/prompts/boot.md` exists
+1. **Pre-flight** — verify the configured agent CLI is installed and on PATH, `docs/tasks/` exists
 2. **Database** — if project has Docker Compose, start containers before each iteration
 3. **Clean slate** — discard unstaged changes from crashed iterations, except in protected planning paths (`docs/tasks/`, `docs/PRD.md`, `docs/prompts/`, `docs/RALPH-METHODOLOGY.md`, `ralph.config.json`). These human-authored planning artifacts must survive the clean slate so users can queue task files, PRD edits, and prompt changes between iterations without committing first.
 4. **Find next task** — scan task files, select lowest-numbered eligible TODO
-5. **Build prompt** — load the boot prompt template from `docs/prompts/boot.md`, interpolate task and config variables
+5. **Build prompt** — assemble the prompt from built-in templates and user extensions (see §5), interpolate task and config variables
 6. **Launch agent** — spawn the configured agent CLI with the rendered prompt and resolved model (task-level model overrides project default; see §11)
 7. **Monitor** — track progress via the agent's output stream
 8. **Timeout** — kill iterations exceeding the time limit
@@ -186,7 +193,7 @@ When a task fails (timeout, non-zero exit, no commit detected), the next attempt
 - Last error or failure output
 - Files that were modified before failure
 
-This context is injected into the boot prompt so the agent can avoid repeating the same mistake. See §5.6.
+This context is injected into the boot prompt so the agent can avoid repeating the same mistake. See §5.7.
 
 **Exit conditions:**
 
@@ -328,30 +335,132 @@ ralph retry T-005 [T-006 ...]
 - If the task is already TODO with no logs, no-op with a message
 - Supports multiple task IDs in a single invocation
 
-### 3.9 `ralph update`
+### 3.9 `ralph show`
 
-Refresh ralph-owned files after upgrading the package. Regenerates methodology docs and prompt templates without touching user-authored content.
+Transparency command that displays the effective content ralph uses at runtime — built-in defaults merged with any user extensions. This lets users inspect exactly what the agent sees without reading ralph's source code.
 
-**Updates:**
+**Subcommands:**
 
-- `docs/RALPH-METHODOLOGY.md` — full methodology reference
-- `docs/prompts/boot.md` — default boot prompt template
-- `docs/prompts/system.md` — stable system-level prompt layer
-- `docs/prompts/README.md` — prompt directory documentation
-- Agent instructions file (e.g., `.claude/CLAUDE.md`) — regenerated from `ralph.config.json`
+- `ralph show system-prompt` — the effective system prompt (built-in + user extensions from `docs/prompts/system.md`)
+- `ralph show boot-prompt` — the effective boot prompt template (built-in + user extensions from `docs/prompts/boot.md`), with template variables shown as placeholders
+- `ralph show roles` — all active roles (built-in + custom), showing which are overridden, added, or disabled by the user
+- `ralph show methodology` — the full Ralph Methodology reference (built-in + user extensions from `docs/prompts/methodology.md`)
+- `ralph show rules` — project-specific rules from `docs/prompts/rules.md`
+- `ralph show task T-NNN` — the effective task body that the agent will receive for a specific task, showing exactly which sections are included and which are excluded. Also shows the resolved role list (built-in defaults filtered by task-level `Roles` field if present, merged with user customizations from `docs/prompts/roles.md`). This is the primary verification tool for users extending task files with custom sections — run it to confirm your content reaches the agent.
 
-**Preserves:**
+**Options:**
 
-- `docs/prompts/rules.md` — user-authored, never overwritten
-- `docs/PRD.md` — user-authored
-- `docs/tasks/*` — user-authored
-- `ralph.config.json` — user-authored (read as input, not modified)
+- `--json` — output as JSON (for tooling integration)
+- `--built-in-only` — show only ralph's built-in content, ignoring user extensions (useful for diffing against extensions)
 
 **Behavior:**
 
-- Reads `ralph.config.json` for project configuration (errors if missing)
-- Compares generated content against existing files; only writes if changed
-- Reports which files were updated and which were already up to date
+- Each subcommand displays the merged result of built-in content + user extensions
+- If no user extensions exist for a given layer, the built-in content is shown as-is
+- If user extensions exist, they are clearly delineated in the output (e.g., a separator showing where built-in ends and user extensions begin)
+
+### 3.10 `ralph task`
+
+Scaffold a new task file with the correct format and next available task number.
+
+```bash
+ralph task "Implement user registration"
+# → creates docs/tasks/T-081.md
+
+ralph task "Fix login bug" --depends T-040 --complexity light --milestone "3 — Auth"
+# → pre-fills fields from flags
+```
+
+**Behavior:**
+
+- Scans `docs/tasks/` for the highest `T-NNN` number and increments by one
+- Generates a task file from the built-in task template, pre-filled with:
+  - The next task number and the provided title
+  - `Status: TODO`
+  - Fields from CLI flags (`--depends`, `--complexity`, `--milestone`, `--prd-ref`, `--touches`, `--roles`)
+  - Placeholder sections (Description, AC) with guidance comments explaining that all custom sections reach the agent
+- If `docs/prompts/task-template.md` exists, uses it as the template instead of the built-in default (Extension API — see §12.3)
+- Opens the file path in stdout so the user can pipe it to their editor (e.g., `ralph task "Fix bug" | xargs code`)
+
+**Built-in template includes a guidance comment:**
+
+```markdown
+<!-- Sections: All sections below are sent to the agent except:
+     Hints (sent separately), Produces, Completion Notes, and Blocked.
+     Add any custom sections you need — they will reach the agent.
+     Run `ralph show task T-NNN` to verify. -->
+```
+
+**Options:**
+
+- `--depends <ids>` — comma-separated dependency list (default: `none`)
+- `--complexity <tier>` — `light`, `standard`, or `heavy`
+- `--milestone <name>` — milestone name (e.g., `"3 — Auth"`)
+- `--prd-ref <refs>` — PRD reference (e.g., `"§3.2, §3.3"`)
+- `--touches <paths>` — comma-separated file paths
+- `--roles <names>` — comma-separated role names for per-task role selection
+- `--dry-run` — print the task file to stdout without creating it
+
+### 3.11 `ralph review`
+
+Post-execution analysis, failure diagnosis, and coaching. This command helps users understand what happened during a task's execution, fix problems with failed tasks, and improve their task definitions, role customizations, and extensions over time.
+
+#### Task review: `ralph review T-NNN`
+
+Displays a structured timeline of what happened when a task was executed:
+
+- **Status summary** — DONE, BLOCKED (with reason), or failed (with exit condition)
+- **Attempt history** — if the task was retried, show each attempt with its outcome
+- **Phase timeline** — Boot → Red → Green → Verify → Commit with durations per phase
+- **Role commentary** — every `[ROLE: ...]` marker from the log, organized by phase. This is the primary way users see the interplay between roles: which roles participated at each gate, what they approved or flagged, and how their feedback shaped the implementation.
+- **Key decisions** — significant moments extracted from the log: test strategy (SDET at Red), architectural choices (Architect at Boot), security flags (AppSec at Verify), TDD compliance verdict (SDET at Verify), code review outcome (Tech Lead at Verify)
+- **Cost and turns** — token usage, cost, turns used vs. limit
+- **Files changed** — list of files modified in the commit (if completed)
+
+If multiple log files exist for the task (retries), all attempts are shown in sequence so the user can see the progression.
+
+#### Failure diagnosis: `ralph review T-NNN --diagnose`
+
+For BLOCKED or failed tasks, analyzes the log to identify the root cause and recommend corrections:
+
+- **Failure classification** — categorizes the failure: timeout, max turns exhausted, quality check failure, blocked by agent, no commit detected, role review rejection
+- **Root cause extraction** — parses the log for the last error, the phase where failure occurred, and the context leading up to it
+- **Role-specific feedback** — if a role flagged an issue during a gate phase (e.g., Tech Lead rejected code quality, SDET flagged TDD non-compliance), surfaces that commentary as the likely cause
+- **Recommendations** — actionable suggestions based on the failure type:
+  - Timeout → suggest increasing complexity tier or splitting the task
+  - Max turns → suggest adding Hints to reduce exploration, or increasing `--max-turns`
+  - Quality check failure → show which check failed and suggest fixes
+  - Role rejection → show the role's feedback and suggest task/code adjustments
+  - Missing dependency → identify which files or modules the agent tried to use but didn't exist
+  - Vague description → flag if the Description section is short or lacks acceptance criteria
+
+#### Project coaching: `ralph review --coach`
+
+Analyzes all completed and failed tasks, role customizations, and extensions to suggest improvements:
+
+**Task quality analysis:**
+
+- Flags TODO tasks with vague or missing Description, no AC section, or missing PRD Reference
+- Identifies tasks that consistently exceed their complexity tier (took more turns/time than allocated) — suggests upgrading to a higher tier or splitting
+- Identifies tasks that completed well under their tier — suggests downgrading to save budget
+- Flags tasks with no Depends that might benefit from explicit dependencies (based on file overlap with other tasks)
+
+**Role effectiveness analysis:**
+
+- Identifies roles that skip on most tasks — suggests disabling them project-wide via `docs/prompts/roles.md` if they're not relevant
+- Identifies roles whose commentary is frequently followed by rework — suggests the role's review criteria may need refinement via override
+- Flags if custom roles are defined but never referenced in task `Roles` fields
+
+**Extension health:**
+
+- Checks if user extension files exist and reports their status
+- If `docs/prompts/rules.md` is empty or default, suggests adding project-specific rules based on patterns observed in completed tasks (e.g., all tasks use the same test directory pattern)
+- If task complexity is frequently miscategorized, suggests adding Hints to underperforming tasks
+
+**Options:**
+
+- `--json` — structured JSON output (all modes)
+- `--verbose` — include full role commentary text (default: summary only)
 
 ## 4. Log Files
 
@@ -376,13 +485,39 @@ The agent CLI's raw JSONL output does not include timestamps. Ralph must inject 
 
 The log capture layer (`spawnWithCapture`) must not pipe raw output directly to the log file. Instead, it must buffer incoming data into complete lines, parse each line as JSON, inject `"timestamp": "<ISO 8601>"`, re-serialize, and write the enriched line. Non-JSON lines (e.g., stderr) should be written as-is.
 
-## 5. The Boot Prompt
+## 5. Prompt Architecture — Built-in First with User Extensions
 
-The boot prompt is a Markdown template stored in the user's project at `docs/prompts/boot.md`. It is the methodology's instruction set — each stateless agent session follows its rules.
+> **Public API** — The extension mechanism is a stable contract. See §12.3 for the full extension file reference and backward-compatibility guarantees.
+
+Ralph's prompts follow a **built-in-first** architecture: all methodology content, prompt templates, and role definitions live in ralph's package code and are used directly at runtime. They are never copied into the user's project. When the user runs `pnpm dlx @smplcty/ralph loop`, they always get the latest prompts.
+
+Users extend ralph's built-in content through optional files in `docs/prompts/`. These files contain **only user additions** — they are appended to (not replacements for) the built-in content. If no extension files exist, ralph works with zero configuration.
+
+**Runtime prompt assembly:**
+
+For each prompt layer, ralph assembles the effective content as:
+
+```
+effective_content = built_in_content() + user_extension_content()
+```
+
+where `user_extension_content()` reads from the project's `docs/prompts/` directory and returns an empty string if the file does not exist.
+
+**Extension files (all optional, user-authored only):**
+
+| File                          | Extends                   | Purpose                                                                                                 |
+| ----------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `docs/prompts/system.md`      | Built-in system prompt    | Additional system-level instructions appended after ralph's methodology, roles, and quality gates       |
+| `docs/prompts/boot.md`        | Built-in boot prompt      | Additional boot-level content appended after ralph's task/config/scoping sections                       |
+| `docs/prompts/rules.md`       | (standalone)              | Project-specific rules injected via `{{project.rules}}` — the one file `ralph init` creates (see §5.10) |
+| `docs/prompts/roles.md`       | Built-in role definitions | Role overrides, additions, and disables (see §9.6)                                                      |
+| `docs/prompts/methodology.md` | Built-in methodology      | Additional methodology guidance appended after ralph's built-in methodology reference                   |
+
+`ralph init` creates only `docs/prompts/rules.md`. All other extension files are created by the user when they want to customize. `ralph show` (§3.9) lets users inspect the effective merged content.
 
 ### 5.1 Template Variables
 
-The template supports variable interpolation using `{{variable}}` syntax. Ralph replaces these before sending the prompt to the agent:
+The built-in boot prompt template supports variable interpolation using `{{variable}}` syntax. Ralph replaces these before sending the prompt to the agent:
 
 | Variable                      | Value                                                              |
 | ----------------------------- | ------------------------------------------------------------------ |
@@ -400,31 +535,54 @@ The template supports variable interpolation using `{{variable}}` syntax. Ralph 
 | `{{task.touches}}`            | Comma-separated file paths from the Touches field (blank if unset) |
 | `{{task.hints}}`              | Content of the task's Hints section (blank if no Hints section)    |
 | `{{task.prdContent}}`         | Extracted PRD section content matching the task's PRD Reference    |
-| `{{project.rules}}`           | Contents of `docs/prompts/rules.md` (see §5.9)                     |
-| `{{codebaseIndex}}`           | Auto-generated file/export index (see §5.5)                        |
-| `{{retryContext}}`            | Context from a previous failed attempt, if any (see §5.6)          |
+| `{{project.rules}}`           | Contents of `docs/prompts/rules.md` (see §5.10)                    |
+| `{{codebaseIndex}}`           | Auto-generated file/export index (see §5.6)                        |
+| `{{retryContext}}`            | Context from a previous failed attempt, if any (see §5.7)          |
 
-### 5.2 Default Template
+Template variables are interpolated in both built-in templates and user extension files, so users can reference task and config values in their extensions.
 
-`ralph init` drops a default `docs/prompts/boot.md` that instructs the agent to:
+### 5.2 Built-in System Prompt
 
-1. Read the task file and referenced PRD sections
-2. Implement using red/green TDD
-3. Run the quality check command after each layer
-4. Commit with message format `T-NNN: description`
-5. Update the task file in the same commit
-6. Use adequate timeouts for test/build commands
-7. Complete ONE task, then stop
+The built-in system prompt is compiled into ralph's package and includes:
 
-### 5.3 Customization
+1. Phase logging requirements (`[PHASE] Entering: ...`)
+2. TDD workflow (Boot → Red → Green → Verify → Commit)
+3. Quality gates and tool usage rules
+4. Agent role definitions and participation rules (§9)
+5. Commentary format requirements (`[ROLE: ...]`)
+6. Command output hygiene and anti-patterns
 
-Users may edit `docs/prompts/boot.md` freely before running `ralph loop`. This allows teams to adjust methodology rules, add project-specific instructions, or change the TDD workflow without modifying ralph's source code.
+This content is stable across all iterations and benefits from prompt caching. Users can inspect it via `ralph show system-prompt`.
 
-### 5.4 Inline PRD Section Injection
+### 5.3 Built-in Boot Prompt
+
+The built-in boot prompt is compiled into ralph's package and includes:
+
+1. Current task details (ID, title, description, PRD reference)
+2. Project configuration values
+3. File scoping guidance
+4. Codebase index
+5. Retry context (when applicable)
+6. Task context for role applicability
+
+Users can inspect it via `ralph show boot-prompt`.
+
+### 5.4 User Extensions
+
+Users extend ralph's built-in content by creating files in `docs/prompts/`. Extension content is appended after the corresponding built-in content, separated by a clear marker in the effective prompt (e.g., `--- Project Extensions ---`).
+
+This means:
+
+- Users never need to duplicate ralph's built-in content
+- Ralph upgrades automatically flow to all projects
+- User extensions survive upgrades because they are separate files that ralph never overwrites
+- `ralph show` displays the merged result so users can verify the effective content
+
+### 5.5 Inline PRD Section Injection
 
 The boot prompt must include the actual content of the PRD section referenced by the task, not just a section number. At prompt build time, ralph parses the `PRD Reference` field (e.g., `§3.2`), extracts the corresponding section from `docs/PRD.md`, and injects it as a `{{task.prdContent}}` template variable. This eliminates the agent wasting turns reading the entire PRD to find the relevant section.
 
-### 5.5 Codebase Index
+### 5.6 Codebase Index
 
 Before each iteration, ralph generates a lightweight codebase index — a list of source files with their exported symbols — and injects it into the prompt as `{{codebaseIndex}}`. This lets the agent surgically read only the files it needs instead of exploring the entire codebase during the Boot phase.
 
@@ -432,7 +590,7 @@ The index is generated by scanning source files (e.g., `src/**/*.ts`) and extrac
 
 **Scaling note:** A full codebase index becomes expensive at ~500–1,000+ source files (~15k–30k+ tokens), where it starts competing for context space and undermining prompt cache hits. Future versions may need to filter the index (e.g., by proximity to the task's `Touches` paths or a token budget cap), but this is not a concern for now — ralph projects are typically greenfield and will stay well under that threshold.
 
-### 5.6 Retry Context
+### 5.7 Retry Context
 
 When a task is being retried after a failed iteration, ralph injects context from the previous attempt into the boot prompt as `{{retryContext}}`. This variable is empty on the first attempt and populated on retries. See §3.2 for what is extracted from the failed log.
 
@@ -442,22 +600,26 @@ The retry context should instruct the agent to:
 - Focus on the failure point (e.g., if Verify failed, focus on fixing quality issues rather than rewriting from scratch)
 - Reference the specific files that were modified in the previous attempt
 
-### 5.7 Layered Prompt Architecture
+### 5.8 Layered Prompt Architecture
 
-As the codebase and prompt grow, the boot prompt should be split into layers to maximize API cache hits and reduce token waste:
+The prompt is split into layers to maximize API cache hits and reduce token waste. Each layer has a **built-in** component from ralph's code and an optional **user extension** from the project's `docs/prompts/` directory:
 
-| Layer        | Content                                                         | Stability                                 |
-| ------------ | --------------------------------------------------------------- | ----------------------------------------- |
-| **System**   | TDD methodology, tool usage rules, commit format, quality gates | Stable across all iterations (cacheable)  |
-| **Project**  | Config values, file naming, quality commands                    | Stable across iterations (cacheable)      |
-| **Rules**    | Project-specific rules from `docs/prompts/rules.md`             | Stable across iterations (cacheable)      |
-| **Codebase** | Auto-generated file/export index                                | Changes only when files are added/removed |
-| **Task**     | Task description, PRD section content, touches, hints           | Changes per task                          |
-| **Retry**    | Previous failure context                                        | Only present on retries                   |
+| Layer           | Built-in Content                                        | User Extension File           | Stability                                 |
+| --------------- | ------------------------------------------------------- | ----------------------------- | ----------------------------------------- |
+| **System**      | TDD methodology, tool usage rules, roles, quality gates | `docs/prompts/system.md`      | Stable across all iterations (cacheable)  |
+| **Methodology** | Ralph Methodology reference                             | `docs/prompts/methodology.md` | Stable across all iterations (cacheable)  |
+| **Roles**       | 9 built-in role definitions and participation rules     | `docs/prompts/roles.md`       | Stable across all iterations (cacheable)  |
+| **Project**     | Config values, file naming, quality commands            | —                             | Stable across iterations (cacheable)      |
+| **Rules**       | —                                                       | `docs/prompts/rules.md`       | Stable across iterations (cacheable)      |
+| **Codebase**    | Auto-generated file/export index                        | —                             | Changes only when files are added/removed |
+| **Task**        | Task description, PRD section content, touches, hints   | —                             | Changes per task                          |
+| **Retry**       | Previous failure context                                | —                             | Only present on retries                   |
 
-For agents that support `--system-prompt` (or equivalent), the System and Project layers should be passed as the system prompt, and the remaining layers as the user prompt. This maximizes prompt caching at the API level.
+For agents that support `--system-prompt` (or equivalent), the System, Methodology, Roles, Project, and Rules layers should be passed as the system prompt, and the remaining layers as the user prompt. This maximizes prompt caching at the API level.
 
-### 5.8 Boot Phase Guidance
+User extension files are appended to their corresponding built-in layer. If a user extension file does not exist, the built-in content is used alone. This means ralph works with zero user-authored prompt files — `docs/prompts/rules.md` (created by `ralph init`) is the only prompt file that exists by default.
+
+### 5.9 Boot Phase Guidance
 
 The default boot prompt template must include explicit guidance to prevent the agent from wasting tokens during the Boot phase:
 
@@ -479,7 +641,7 @@ The default boot prompt template must include explicit guidance to prevent the a
   - Write semantic test assertions, not string-matching against prompt text.
   - Do not amend commits to add the SHA — leave it for the loop's post-iteration handling.
 
-### 5.9 Project-Specific Rules
+### 5.10 Project-Specific Rules
 
 Project-specific rules and constraints live in `docs/prompts/rules.md`, a user-editable Markdown file. This file is the place for instructions like "all code goes under `src/foo/`", "do not use library X", or "tests go in `__tests__/`" — rules that apply to every task but are specific to the project, not to the methodology or the agent.
 
@@ -621,6 +783,47 @@ All role commentary is part of the agent's standard output stream and is capture
 
 `ralph monitor` displays the agent's text output in real time (§3.3). When role commentary is the latest output, the monitor's "Last output" line will naturally show it, giving the developer visibility into which role is currently active.
 
+### 9.6 Role Customization
+
+Users customize roles via `docs/prompts/roles.md`, an optional file that extends the built-in role definitions. The file uses Markdown headings with directives:
+
+**Override a built-in role** — replace its description for this project:
+
+```markdown
+## Override: SDET
+
+In this project, the SDET focuses on integration testing with real database connections.
+All tests must hit the actual PostgreSQL instance, not mocks.
+```
+
+**Add a custom role** — define a new role with its participation phases:
+
+```markdown
+## Add: Compliance Officer
+
+- **Focus**: Regulatory compliance
+- **Responsibility**: Reviews all data handling for GDPR/HIPAA compliance. Validates that PII is encrypted at rest and in transit. Checks audit logging for sensitive operations.
+- **Participates**: Boot, Verify
+```
+
+**Disable a built-in role** — exclude it from this project:
+
+```markdown
+## Disable: UX/UI Designer
+
+This is a headless API project with no user-facing surface.
+```
+
+**Per-task role selection** — task files may include an optional `Roles` field:
+
+```markdown
+- **Roles**: DBA, Compliance Officer
+```
+
+When `Roles` is present, only the listed roles participate (plus Engineers, which always participate). When absent, all applicable roles participate using the default applicability logic from §9.2.
+
+At prompt build time, ralph merges the built-in role definitions with user customizations from `docs/prompts/roles.md`. Overrides replace the built-in description. Additions are appended. Disables remove the role entirely. The merged result is injected into the system prompt. Users can inspect the effective roles via `ralph show roles`.
+
 ## 10. Non-Goals
 
 - Ralph does NOT manage or install AI coding agents — it assumes the configured CLI is available
@@ -662,3 +865,92 @@ For agents that do not support `--max-turns`, ralph relies on its own timeout me
 ### 11.4 Adding New Providers
 
 New agents can be supported by implementing the provider interface (§11.1) and registering the provider. No changes to the orchestrator or prompt system should be required.
+
+## 12. Public API Contracts
+
+Ralph exposes two public APIs that users build on: the **Task File Format** and the **Extension API**. These are the surfaces where ralph's behavior intersects with user-authored content. Breaking changes to either surface break the user's project. Both must be treated as stable contracts with the same discipline as a library's public API.
+
+### 12.1 Contract Principles
+
+1. **Backward compatibility** — new fields and extension files may be added, but existing fields and extension behaviors must not change meaning or be removed without a major version bump.
+2. **Additive only** — between major versions, ralph may add new optional task fields, new extension file types, and new built-in roles. It must not rename, remove, or reinterpret existing ones.
+3. **Fail gracefully** — unknown task fields are ignored (not errors). Malformed extension files produce warnings, not crashes. This lets users add custom metadata fields to task files without ralph rejecting them.
+4. **Documented and discoverable** — both contracts must be documented prominently in the README, the docs site, and via `ralph show`. A user should never have to read ralph's source code to understand how to write a task file or an extension.
+
+### 12.2 Task File API
+
+The task file format (§1) is a public contract. Users author these files by hand, and external tools may generate them. Ralph guarantees:
+
+**Required fields** (ralph reads these, must be present for the task to be eligible):
+
+| Field           | Format                            | Description                                          |
+| --------------- | --------------------------------- | ---------------------------------------------------- |
+| `Status`        | `TODO` \| `DONE` \| `BLOCKED`     | Task state. Ralph selects `TODO` tasks.              |
+| `Milestone`     | `N — Name`                        | Grouping for progress tracking.                      |
+| `Depends`       | Comma-separated `T-NNN` or `none` | Dependency list. All must be `DONE` for eligibility. |
+| `PRD Reference` | `§N.N` references                 | Sections injected into the prompt.                   |
+
+**Optional fields** (ralph reads these when present, ignores when absent):
+
+| Field            | Format                           | Description                                        |
+| ---------------- | -------------------------------- | -------------------------------------------------- |
+| `Complexity`     | `light` \| `standard` \| `heavy` | Overrides auto-detection for turn/timeout scaling. |
+| `Touches`        | Comma-separated file paths       | Files injected into the prompt for scoping.        |
+| `Hints`          | (section body)                   | Implementation guidance injected into the prompt.  |
+| `Model`          | Model identifier string          | Overrides the project default model for this task. |
+| `Roles`          | Comma-separated role names       | Restricts which agent roles participate (§9.6).    |
+| `Completed`      | `YYYY-MM-DD HH:MM (Nm duration)` | Set by the agent on completion.                    |
+| `Commit`         | 40-character SHA                 | Backfilled by ralph post-iteration.                |
+| `Cost`           | `$N.NN`                          | Backfilled by ralph post-iteration.                |
+| `Blocked reason` | Free text                        | Reason when Status is BLOCKED.                     |
+
+**Sections** — ralph uses an **exclusion-based** model for task sections. Only the sections listed below are excluded from the task body sent to the agent. All other sections — including any custom sections the user adds — are included in `{{task.description}}` and reach the agent automatically.
+
+Excluded sections (not sent to the agent as part of the task body):
+
+| Section               | Reason for exclusion                                         |
+| --------------------- | ------------------------------------------------------------ |
+| `## Hints`            | Sent separately as `{{task.hints}}` to avoid duplication.    |
+| `## Produces`         | Human reference only (expected deliverables).                |
+| `## Completion Notes` | Written by the agent after completion, not actionable input. |
+| `## Blocked`          | Used for eligibility check, not implementation guidance.     |
+
+Everything else is included. This means users can freely add custom sections like `## Security Considerations`, `## Migration Plan`, `## Performance Requirements`, or any other heading — ralph will include them in the task body sent to the agent.
+
+**Verification:** Users can run `ralph show task T-NNN` (§3.9) to see exactly what the agent will receive, including which sections are included and which are excluded. This eliminates guesswork.
+
+**Any fields or sections not consumed by ralph are preserved as-is.** Users and external tools may add custom metadata fields (e.g., `Assignee`, `Priority`, `Epic`) without affecting ralph's behavior — unknown fields are ignored, custom sections reach the agent.
+
+### 12.3 Extension API
+
+The extension mechanism (§5.4) is a public contract. Users create files in `docs/prompts/` to customize ralph's behavior. Ralph guarantees:
+
+**Extension files and their behavior:**
+
+| File                            | Merge behavior                     | Format                                                                                                                 |
+| ------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `docs/prompts/system.md`        | Appended to built-in system prompt | Free-form Markdown. Template variables supported.                                                                      |
+| `docs/prompts/boot.md`          | Appended to built-in boot prompt   | Free-form Markdown. Template variables supported.                                                                      |
+| `docs/prompts/methodology.md`   | Appended to built-in methodology   | Free-form Markdown.                                                                                                    |
+| `docs/prompts/rules.md`         | Injected as `{{project.rules}}`    | Free-form Markdown.                                                                                                    |
+| `docs/prompts/roles.md`         | Merged with built-in roles         | Directive headings: `## Override:`, `## Add:`, `## Disable:` (§9.6).                                                   |
+| `docs/prompts/task-template.md` | Replaces built-in task scaffold    | Markdown task template used by `ralph task` (§3.10). Must include `{{task.number}}` and `{{task.title}}` placeholders. |
+
+**Guarantees:**
+
+- Extension files are **always optional**. Ralph works with zero extension files.
+- Extension files are **never overwritten** by ralph. No command (init, loop, or otherwise) modifies files in `docs/prompts/`.
+- Extension content is **appended after** built-in content, separated by a clear marker. User content never replaces built-in content (except role overrides via the explicit `## Override:` directive).
+- **Template variables** (`{{task.id}}`, `{{config.language}}`, etc.) are interpolated in extension files, using the same variable set as built-in templates (§5.1).
+- `ralph show` always displays the **effective merged result** so users can verify exactly what the agent will see.
+- New extension file types may be added in future versions. Existing extension files will continue to work unchanged.
+
+### 12.4 Documentation Requirements
+
+Both contracts must be documented in three places:
+
+1. **README.md** — a concise API reference section showing the task file format and the extension file list with their merge behaviors. This is the first thing a user sees and must be sufficient to get started without clicking through to the docs site.
+2. **Docs site** — dedicated reference pages for the Task File API and Extension API, with full field descriptions, examples, and the contract guarantees. These pages should be linked prominently from the Getting Started guide, not buried in a guides section.
+3. **`ralph show`** — the CLI itself is documentation. `ralph show roles`, `ralph show system-prompt`, etc. give users live, accurate views of the effective content.
+
+The API reference pages on the docs site should be structured like library API docs: field tables, type definitions, examples, and a "Stability" note at the top stating the backward-compatibility guarantee.
