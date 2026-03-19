@@ -13,6 +13,7 @@ import {
   filterRolesForTask,
   formatRolesForPrompt,
 } from './roles.js';
+import { generateMethodology } from '../templates/methodology.js';
 
 export function interpolateTemplate(
   template: string,
@@ -152,6 +153,17 @@ export async function loadLayeredPrompt(
   const rolesText = formatRolesForPrompt(activeRoles);
 
   systemPrompt = systemPrompt.replace('{{roles}}', rolesText);
+
+  // Load and merge methodology
+  const builtInMethodology = generateMethodology();
+  const methodologyExtension = await readExtensionFile(
+    join(projectDir, 'docs', 'prompts', 'methodology.md'),
+    builtInMethodology,
+  );
+  const effectiveMethodology = methodologyExtension
+    ? appendExtension(builtInMethodology, methodologyExtension)
+    : builtInMethodology;
+  systemPrompt = `${systemPrompt}\n\n${effectiveMethodology}`;
 
   const userPrompt = await loadAndInterpolate(
     projectDir,

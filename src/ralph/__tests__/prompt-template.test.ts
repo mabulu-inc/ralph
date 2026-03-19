@@ -10,6 +10,7 @@ import {
 } from '../core/prompt-template.js';
 import { defaultBootPromptTemplate } from '../templates/boot-prompt.js';
 import { defaultSystemPromptTemplate } from '../templates/system-prompt.js';
+import { generateMethodology } from '../templates/methodology.js';
 import type { Task } from '../core/tasks.js';
 import type { ProjectConfig } from '../core/config.js';
 
@@ -475,5 +476,46 @@ describe('loadLayeredPrompt', () => {
     expect(result.systemPrompt).toContain('Product Manager');
     expect(result.systemPrompt).toContain('DBA / Data Engineer');
     expect(result.systemPrompt).toContain('SDET');
+  });
+
+  it('includes built-in methodology in system prompt', async () => {
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    const methodology = generateMethodology();
+    expect(result.systemPrompt).toContain(methodology);
+  });
+
+  it('appends methodology extension when methodology.md exists', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'methodology.md'),
+      'Custom methodology extension for this project.',
+    );
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    // Built-in methodology present
+    expect(result.systemPrompt).toContain('Ralph Methodology');
+    expect(result.systemPrompt).toContain('Quality Gates');
+    // Extension appended
+    expect(result.systemPrompt).toContain('Custom methodology extension for this project.');
+  });
+
+  it('uses built-in methodology alone when no methodology.md exists', async () => {
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    expect(result.systemPrompt).toContain('Ralph Methodology');
+    expect(result.systemPrompt).toContain('Quality Gates');
+    // No extension separator for methodology
+    const methodology = generateMethodology();
+    // The system prompt should contain the methodology content
+    expect(result.systemPrompt).toContain(methodology);
+  });
+
+  it('skips duplicate methodology extension when methodology.md matches built-in', async () => {
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'methodology.md'), generateMethodology());
+
+    const result = await loadLayeredPrompt(tmpDir, mockTask, mockConfig);
+    // Should contain methodology exactly once (no duplication via extension)
+    const methodologyOccurrences = result.systemPrompt!.split('# Ralph Methodology').length - 1;
+    expect(methodologyOccurrences).toBe(1);
   });
 });
