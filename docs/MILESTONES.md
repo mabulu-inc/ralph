@@ -129,7 +129,7 @@
 
 - [x] T-075: Integrate agent roles into iteration prompt and logging — $0.61
 
-## 15 — Prompt Architecture ($8.40)
+## 15 — Prompt Architecture ($9.47)
 
 - [x] T-076: Built-in-first prompt architecture — $2.94
 - [x] T-077: Role customization via docs/prompts/roles.md — $1.21
@@ -139,11 +139,11 @@
 - [x] T-081: Exclusion-based task body extraction and ralph show task — $1.08
 - [x] T-082: ralph task command for scaffolding task files — $0.58
 - [x] T-085: ralph migrate — clean up legacy prompt files from pre-built-in-first projects — $1.32
-- [ ] T-086: Remove agent instructions file generation and dependency
+- [x] T-086: Remove agent instructions file generation and dependency — $1.07
 
 ## 16 — Observability ($3.49)
 
 - [x] T-083: ralph review T-NNN — task execution analysis and failure diagnosis — $1.77
 - [x] T-084: ralph review --coach — project-wide coaching and improvement suggestions — $1.72
 
-**Grand Total: $74.11**
+**Grand Total: $75.18**
