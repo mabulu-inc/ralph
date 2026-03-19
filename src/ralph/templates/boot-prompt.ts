@@ -22,5 +22,10 @@ Read these files first during Boot. Skip unrelated files. During TDD, run only t
 CODEBASE INDEX:
 {{codebaseIndex}}
 
+TASK CONTEXT FOR ROLES:
+- PRD sections referenced: {{task.prdReference}}
+- Database/persistence involved: {{config.database}} (if empty, DBA role should skip — no data models or persistence changes)
+- User-facing surface: Review the task description above for CLI output, error messages, or interactive prompts. If none are present, UX/UI Designer should skip — no user-facing surface.
+
 {{retryContext}}`;
 }

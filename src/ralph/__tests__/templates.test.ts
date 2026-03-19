@@ -239,6 +239,28 @@ describe('defaultBootPromptTemplate', () => {
     expect(template).toContain('{{task.id}}');
     expect(template).toContain('{{config.language}}');
   });
+
+  it('includes a TASK CONTEXT FOR ROLES section', () => {
+    const template = defaultBootPromptTemplate();
+    expect(template).toContain('TASK CONTEXT FOR ROLES');
+  });
+
+  it('signals whether task involves data models/persistence for DBA role', () => {
+    const template = defaultBootPromptTemplate();
+    expect(template.toLowerCase()).toContain('database');
+    expect(template.toLowerCase()).toContain('persistence');
+  });
+
+  it('signals whether task has user-facing surface for UX role', () => {
+    const template = defaultBootPromptTemplate();
+    expect(template.toLowerCase()).toContain('user-facing');
+  });
+
+  it('references PRD sections for role context', () => {
+    const template = defaultBootPromptTemplate();
+    // The section should reference the task's PRD reference variable
+    expect(template).toContain('{{task.prdReference}}');
+  });
 });
 
 describe('generateTask000', () => {

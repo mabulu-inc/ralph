@@ -65,4 +65,58 @@ describe('defaultSystemPromptTemplate', () => {
     const template = defaultSystemPromptTemplate();
     expect(template).toContain('Complete ONE task, then STOP');
   });
+
+  describe('agent roles (§9)', () => {
+    it('defines all nine agent roles from §9.1', () => {
+      const template = defaultSystemPromptTemplate();
+      const roleNames = [
+        'Product Manager',
+        'System Architect',
+        'Security Engineer',
+        'UX/UI Designer',
+        'Frontend & Backend Engineers',
+        'DevOps / SRE',
+        'SDET',
+        'Technical Lead',
+        'DBA / Data Engineer',
+      ];
+      for (const role of roleNames) {
+        expect(template).toContain(role);
+      }
+    });
+
+    it('includes Boot phase participation rules from §9.2', () => {
+      const template = defaultSystemPromptTemplate();
+      expect(template.toLowerCase()).toContain('boot');
+      // Boot gate roles
+      expect(template).toContain('pre-implementation gate');
+    });
+
+    it('includes Verify phase participation rules from §9.2', () => {
+      const template = defaultSystemPromptTemplate();
+      expect(template).toContain('pre-commit gate');
+    });
+
+    it('requires [ROLE: ...] attributed commentary format from §9.3', () => {
+      const template = defaultSystemPromptTemplate();
+      expect(template).toContain('[ROLE:');
+    });
+
+    it('includes SDET TDD compliance audit criteria from §9.4', () => {
+      const template = defaultSystemPromptTemplate();
+      expect(template).toContain('TDD compliance');
+      expect(template.toLowerCase()).toContain('test-first');
+    });
+
+    it('instructs non-applicable roles to explicitly skip with a reason', () => {
+      const template = defaultSystemPromptTemplate();
+      expect(template.toLowerCase()).toContain('skip');
+      expect(template).toContain('reason');
+    });
+
+    it('requires all applicable roles to produce commentary before proceeding', () => {
+      const template = defaultSystemPromptTemplate();
+      expect(template.toLowerCase()).toContain('commentary');
+    });
+  });
 });
