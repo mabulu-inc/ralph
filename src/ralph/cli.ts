@@ -8,6 +8,7 @@ const COMMANDS = [
   'cost',
   'update',
   'retry',
+  'show',
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -53,6 +54,7 @@ export function formatHelp(unknown?: string): string {
   lines.push('  cost        Calculate token usage and costs');
   lines.push('  update      (deprecated) Built-in templates are now automatic');
   lines.push('  retry       Retry BLOCKED tasks from scratch');
+  lines.push('  show        Display effective prompt content');
 
   return lines.join('\n');
 }
@@ -93,6 +95,10 @@ const COMMAND_HELP: Record<Command, { description: string; usage: string }> = {
   retry: {
     description: 'Retry BLOCKED tasks from scratch',
     usage: 'ralph retry <task-id> [task-id ...]',
+  },
+  show: {
+    description: 'Display effective prompt content',
+    usage: 'ralph show <subcommand> [--json] [--built-in-only]',
   },
 };
 

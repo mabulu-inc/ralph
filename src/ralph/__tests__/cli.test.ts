@@ -10,6 +10,7 @@ const KNOWN_COMMANDS = [
   'shas',
   'cost',
   'update',
+  'show',
 ] as const;
 
 describe('CLI dispatch', () => {
