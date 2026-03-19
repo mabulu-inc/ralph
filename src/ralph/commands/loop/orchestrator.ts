@@ -25,6 +25,7 @@ import { calculateTaskCost, calculateLogFileCost } from '../../core/cost-tracker
 import { run as runShas } from '../shas.js';
 import { run as runCost } from '../cost.js';
 import { run as runMilestones } from '../milestones.js';
+import { runMigrate } from '../migrate.js';
 import { LoopGitService } from './git-service.js';
 import { scaleForComplexity, type LoopOptions } from './index.js';
 import type { ExitReason } from '../monitor.js';
@@ -76,6 +77,22 @@ export class LoopOrchestrator {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`Preflight: failed to run — ${msg}`);
+    }
+
+    try {
+      const migrateResult = await runMigrate(this.projectDir, { dryRun: true, force: false });
+      if (migrateResult.analyses.length > 0) {
+        const actionable = migrateResult.analyses.filter(
+          (a) => a.classification === 'exact-match' || a.classification === 'modified',
+        );
+        if (actionable.length > 0) {
+          console.log(
+            `Legacy prompt files detected. Run 'ralph migrate' to clean up. Continuing with built-in templates.`,
+          );
+        }
+      }
+    } catch {
+      // Legacy file detection is best-effort
     }
 
     try {

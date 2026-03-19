@@ -10,13 +10,24 @@ import { generateGeminiMd } from '../templates/gemini-md.js';
 import { generateAgentsMd } from '../templates/agents-md.js';
 import { generateContinueYaml } from '../templates/continue-yaml.js';
 import { generateCursorRules } from '../templates/cursor-rules.js';
+import {
+  getSnapshotsForType,
+  computeSimilarity,
+  initializeCurrentSnapshots,
+  getAllSnapshots,
+  type TemplateSnapshot,
+} from '../templates/snapshots/index.js';
 
 export type FileClassification = 'exact-match' | 'modified' | 'no-match';
+
+const SIMILARITY_THRESHOLD = 0.6;
 
 export interface FileAnalysis {
   relativePath: string;
   classification: FileClassification;
   userContent: string | undefined;
+  matchedVersion?: string;
+  userLineCount?: number;
 }
 
 export interface MigrateOptions {
@@ -39,9 +50,32 @@ export function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-export function classifyFile(fileContent: string, knownTemplates: string[]): FileClassification {
+function findBestSnapshotRaw(
+  fileContent: string,
+  snapshots: TemplateSnapshot[],
+): { snapshot: TemplateSnapshot; similarity: number } | undefined {
+  if (snapshots.length === 0) return undefined;
+
+  let best: { snapshot: TemplateSnapshot; similarity: number } | undefined;
+
+  for (const snapshot of snapshots) {
+    const similarity = computeSimilarity(fileContent, snapshot.content);
+    if (!best || similarity > best.similarity) {
+      best = { snapshot, similarity };
+    }
+  }
+
+  return best;
+}
+
+export function classifyFile(
+  fileContent: string,
+  knownTemplates: string[],
+  snapshotType?: string,
+): FileClassification {
   const normalizedFile = normalizeWhitespace(fileContent);
 
+  // Step 1: Check against known templates (current version)
   for (const template of knownTemplates) {
     const normalizedTemplate = normalizeWhitespace(template);
     if (normalizedFile === normalizedTemplate) {
@@ -49,10 +83,29 @@ export function classifyFile(fileContent: string, knownTemplates: string[]): Fil
     }
   }
 
-  // Check if file starts with (contains) a known template — indicating modifications
+  // Step 1b: Check against historical snapshots
+  if (snapshotType) {
+    const snapshots = getSnapshotsForType(snapshotType);
+    for (const snapshot of snapshots) {
+      if (normalizedFile === normalizeWhitespace(snapshot.content)) {
+        return 'exact-match';
+      }
+    }
+  }
+
+  // Step 2: Check if file starts with (contains) a known template — indicating modifications
   for (const template of knownTemplates) {
     const normalizedTemplate = normalizeWhitespace(template);
     if (normalizedTemplate.length > 0 && normalizedFile.startsWith(normalizedTemplate)) {
+      return 'modified';
+    }
+  }
+
+  // Step 2b: Check similarity against historical snapshots (using raw content for line-level comparison)
+  if (snapshotType) {
+    const snapshots = getSnapshotsForType(snapshotType);
+    const bestSnap = findBestSnapshotRaw(fileContent, snapshots);
+    if (bestSnap && bestSnap.similarity >= SIMILARITY_THRESHOLD) {
       return 'modified';
     }
   }
@@ -84,8 +137,6 @@ export function extractUserContent(fileContent: string, closestTemplate: string)
 }
 
 function extractProjectNameFromContent(content: string): string | undefined {
-  // Match patterns like "# ProjectName — Claude Code Instructions"
-  // or "# ProjectName — Gemini CLI Instructions" etc.
   const match = content.match(/^#\s+(.+?)\s+—\s+/m);
   return match?.[1];
 }
@@ -103,34 +154,41 @@ function generateAgentTemplates(projectName: string): InitConfig {
 
 interface LegacyFileSpec {
   relativePath: string;
+  snapshotType: string;
   getTemplates: (fileContent: string) => string[];
 }
 
 const PROMPT_FILES: LegacyFileSpec[] = [
   {
     relativePath: 'docs/prompts/boot.md',
+    snapshotType: 'boot-prompt',
     getTemplates: () => [defaultBootPromptTemplate(), ''],
   },
   {
     relativePath: 'docs/prompts/system.md',
+    snapshotType: 'system-prompt',
     getTemplates: () => [defaultSystemPromptTemplate(), ''],
   },
   {
     relativePath: 'docs/prompts/README.md',
+    snapshotType: 'prompts-readme',
     getTemplates: () => [generatePromptsReadme(), ''],
   },
   {
     relativePath: 'docs/RALPH-METHODOLOGY.md',
+    snapshotType: 'methodology',
     getTemplates: () => [generateMethodology(), ''],
   },
 ];
 
 function agentFileSpec(
   relativePath: string,
+  snapshotType: string,
   generator: (config: InitConfig) => string,
 ): LegacyFileSpec {
   return {
     relativePath,
+    snapshotType,
     getTemplates: (fileContent: string) => {
       const projectName = extractProjectNameFromContent(fileContent);
       if (!projectName) return [''];
@@ -141,11 +199,11 @@ function agentFileSpec(
 }
 
 const AGENT_FILES: LegacyFileSpec[] = [
-  agentFileSpec('.claude/CLAUDE.md', generateClaudeMd),
-  agentFileSpec('GEMINI.md', generateGeminiMd),
-  agentFileSpec('AGENTS.md', generateAgentsMd),
-  agentFileSpec('.continue/config.yaml', (config) => generateContinueYaml(config)),
-  agentFileSpec('.cursor/rules/ralph.md', (config) => generateCursorRules(config)),
+  agentFileSpec('.claude/CLAUDE.md', 'claude-md', generateClaudeMd),
+  agentFileSpec('GEMINI.md', 'gemini-md', generateGeminiMd),
+  agentFileSpec('AGENTS.md', 'agents-md', generateAgentsMd),
+  agentFileSpec('.continue/config.yaml', 'continue-yaml', (config) => generateContinueYaml(config)),
+  agentFileSpec('.cursor/rules/ralph.md', 'cursor-rules', (config) => generateCursorRules(config)),
 ];
 
 const ALL_LEGACY_FILES: LegacyFileSpec[] = [...PROMPT_FILES, ...AGENT_FILES];
@@ -158,7 +216,15 @@ async function readFileIfExists(filePath: string): Promise<string | undefined> {
   }
 }
 
+function ensureSnapshotsInitialized(): void {
+  if (getAllSnapshots().length === 0) {
+    initializeCurrentSnapshots();
+  }
+}
+
 export async function analyzeProject(rootDir: string): Promise<FileAnalysis[]> {
+  ensureSnapshotsInitialized();
+
   const analyses: FileAnalysis[] = [];
 
   for (const spec of ALL_LEGACY_FILES) {
@@ -167,12 +233,43 @@ export async function analyzeProject(rootDir: string): Promise<FileAnalysis[]> {
     if (content === undefined) continue;
 
     const templates = spec.getTemplates(content);
-    const classification = classifyFile(content, templates);
+    const classification = classifyFile(content, templates, spec.snapshotType);
 
     let userContent: string | undefined;
-    if (classification === 'modified') {
+    let matchedVersion: string | undefined;
+    let userLineCount: number | undefined;
+
+    if (classification === 'exact-match') {
+      // Find the matched version
+      const normalizedContent = normalizeWhitespace(content);
+      for (const template of templates) {
+        if (normalizeWhitespace(template) === normalizedContent) {
+          // Current version match — get version from snapshots
+          const snapshots = getSnapshotsForType(spec.snapshotType);
+          const currentSnap = snapshots.find(
+            (s) => normalizeWhitespace(s.content) === normalizeWhitespace(template),
+          );
+          if (currentSnap) {
+            matchedVersion = currentSnap.version;
+          }
+          break;
+        }
+      }
+      // Check historical snapshots if not matched to current templates
+      if (!matchedVersion) {
+        const snapshots = getSnapshotsForType(spec.snapshotType);
+        for (const snapshot of snapshots) {
+          if (normalizeWhitespace(snapshot.content) === normalizedContent) {
+            matchedVersion = snapshot.version;
+            break;
+          }
+        }
+      }
+    } else if (classification === 'modified') {
       // Find closest matching template for extraction
       const normalizedContent = normalizeWhitespace(content);
+
+      // Try current templates first
       let bestTemplate = templates[0];
       let bestLength = 0;
       for (const template of templates) {
@@ -182,10 +279,28 @@ export async function analyzeProject(rootDir: string): Promise<FileAnalysis[]> {
           bestLength = nt.length;
         }
       }
+
+      // Also check snapshots for better match
+      const snapshots = getSnapshotsForType(spec.snapshotType);
+      const best = findBestSnapshotRaw(content, snapshots);
+      if (best) {
+        matchedVersion = best.snapshot.version;
+        if (best.similarity >= SIMILARITY_THRESHOLD) {
+          bestTemplate = best.snapshot.content;
+        }
+      }
+
       userContent = extractUserContent(content, bestTemplate);
+      userLineCount = userContent.split('\n').filter((l) => l.trim().length > 0).length;
     }
 
-    analyses.push({ relativePath: spec.relativePath, classification, userContent });
+    analyses.push({
+      relativePath: spec.relativePath,
+      classification,
+      userContent,
+      matchedVersion,
+      userLineCount,
+    });
   }
 
   return analyses;
@@ -229,15 +344,20 @@ export function formatPlan(analyses: FileAnalysis[]): string {
   const lines: string[] = ['Migration plan:', ''];
 
   for (const a of analyses) {
+    const versionLabel = a.matchedVersion ? `v${a.matchedVersion}` : 'current';
     switch (a.classification) {
       case 'exact-match':
-        lines.push(`  ✓ REMOVE  ${a.relativePath} (unmodified copy of built-in template)`);
+        lines.push(`  ✓ REMOVE  ${a.relativePath} (unmodified ${versionLabel} template)`);
         break;
-      case 'modified':
-        lines.push(`  → EXTRACT ${a.relativePath} (user customizations detected)`);
+      case 'modified': {
+        const lineCount = a.userLineCount ?? 0;
+        lines.push(
+          `  ⚡ MODIFIED ${a.relativePath} (based on ${versionLabel}, ${lineCount} lines of user content)`,
+        );
         break;
+      }
       case 'no-match':
-        lines.push(`  ⚠ SKIP    ${a.relativePath} (unrecognized — verify with ralph show)`);
+        lines.push(`  – SKIP    ${a.relativePath} (not a ralph file)`);
         break;
     }
   }
@@ -269,7 +389,6 @@ export async function runMigrate(rootDir: string, options: MigrateOptions): Prom
   }
 
   if (options.dryRun) {
-    // Count what would happen without doing it
     const summary: MigrateSummary = { removed: 0, extracted: 0, left: 0 };
     for (const a of analyses) {
       switch (a.classification) {
@@ -304,7 +423,9 @@ export async function run(args: string[]): Promise<void> {
   const analyses = await analyzeProject(rootDir);
 
   if (analyses.length === 0) {
-    console.log('Nothing to migrate — no legacy files found.');
+    console.log(
+      'No legacy files found — your project is using the built-in-first architecture. No migration needed.',
+    );
     return;
   }
 
@@ -317,7 +438,6 @@ export async function run(args: string[]): Promise<void> {
   }
 
   if (!options.force) {
-    // In non-interactive mode, require --force
     console.log('Run with --force to apply changes, or --dry-run to preview.');
     return;
   }

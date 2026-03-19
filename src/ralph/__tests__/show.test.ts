@@ -101,7 +101,7 @@ describe('showSystemPrompt', () => {
 
     const result = await showSystemPrompt(tmpDir, { json: false, builtInOnly: false });
     expect(result.content).toContain('Custom system extension');
-    expect(result.content).toContain('Project Extensions');
+    expect(result.content).toContain('(your extensions)');
     expect(result.hasExtension).toBe(true);
   });
 
@@ -146,7 +146,7 @@ describe('showBootPrompt', () => {
 
     const result = await showBootPrompt(tmpDir, { json: false, builtInOnly: false });
     expect(result.content).toContain('Custom boot extension');
-    expect(result.content).toContain('Project Extensions');
+    expect(result.content).toContain('(your extensions)');
     expect(result.hasExtension).toBe(true);
   });
 
@@ -266,7 +266,7 @@ describe('showMethodology', () => {
 
     const result = await showMethodology(tmpDir, { json: false, builtInOnly: false });
     expect(result.content).toContain('Custom methodology notes');
-    expect(result.content).toContain('Project Extensions');
+    expect(result.content).toContain('(your extensions)');
     expect(result.hasExtension).toBe(true);
   });
 
@@ -491,6 +491,72 @@ describe('formatShowHelp with task', () => {
   it('lists the task subcommand', () => {
     const help = formatShowHelp();
     expect(help).toContain('task');
+  });
+});
+
+describe('extension highlighting', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  it('labels built-in and extension sections in system-prompt output', async () => {
+    const promptsDir = path.join(tmpDir, 'docs', 'prompts');
+    fs.mkdirSync(promptsDir, { recursive: true });
+    fs.writeFileSync(path.join(promptsDir, 'system.md'), 'My custom system prompt addition');
+
+    const result = await showSystemPrompt(tmpDir, { json: false, builtInOnly: false });
+    expect(result.hasExtension).toBe(true);
+    expect(result.content).toContain('(built-in)');
+    expect(result.content).toContain('(your extensions)');
+    expect(result.content).toContain('►');
+  });
+
+  it('labels built-in and extension sections in boot-prompt output', async () => {
+    const promptsDir = path.join(tmpDir, 'docs', 'prompts');
+    fs.mkdirSync(promptsDir, { recursive: true });
+    fs.writeFileSync(path.join(promptsDir, 'boot.md'), 'Custom boot addition');
+
+    const result = await showBootPrompt(tmpDir, { json: false, builtInOnly: false });
+    expect(result.hasExtension).toBe(true);
+    expect(result.content).toContain('(built-in)');
+    expect(result.content).toContain('(your extensions)');
+    expect(result.content).toContain('►');
+  });
+
+  it('labels built-in and extension sections in methodology output', async () => {
+    const promptsDir = path.join(tmpDir, 'docs', 'prompts');
+    fs.mkdirSync(promptsDir, { recursive: true });
+    fs.writeFileSync(path.join(promptsDir, 'methodology.md'), 'Custom methodology addition');
+
+    const result = await showMethodology(tmpDir, { json: false, builtInOnly: false });
+    expect(result.hasExtension).toBe(true);
+    expect(result.content).toContain('(built-in)');
+    expect(result.content).toContain('(your extensions)');
+    expect(result.content).toContain('►');
+  });
+
+  it('does not show extension markers when no extension exists', async () => {
+    const result = await showSystemPrompt(tmpDir, { json: false, builtInOnly: false });
+    expect(result.hasExtension).toBe(false);
+    expect(result.content).not.toContain('(built-in)');
+    expect(result.content).not.toContain('(your extensions)');
+  });
+
+  it('prefixes each extension line with ► marker', async () => {
+    const promptsDir = path.join(tmpDir, 'docs', 'prompts');
+    fs.mkdirSync(promptsDir, { recursive: true });
+    fs.writeFileSync(path.join(promptsDir, 'system.md'), 'Line one\nLine two\nLine three');
+
+    const result = await showSystemPrompt(tmpDir, { json: false, builtInOnly: false });
+    expect(result.content).toContain('► Line one');
+    expect(result.content).toContain('► Line two');
+    expect(result.content).toContain('► Line three');
   });
 });
 

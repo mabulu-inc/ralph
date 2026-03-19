@@ -106,9 +106,18 @@ async function readExtension(filePath: string): Promise<string | undefined> {
   }
 }
 
-function mergeContent(builtIn: string, extension: string | undefined): string {
+function formatExtensionLines(extension: string): string {
+  return extension
+    .split('\n')
+    .map((line) => (line.trim() ? `  ► ${line}` : ''))
+    .join('\n');
+}
+
+function mergeContent(builtIn: string, extension: string | undefined, label?: string): string {
   if (!extension) return builtIn;
-  return `${builtIn}\n\n--- Project Extensions ---\n\n${extension}`;
+  const sectionName = label ?? 'Content';
+  const formattedExtension = formatExtensionLines(extension);
+  return `${sectionName} (built-in):\n${builtIn}\n\n${sectionName} (your extensions):\n${formattedExtension}`;
 }
 
 export async function showSystemPrompt(projectDir: string, opts: ShowOptions): Promise<ShowResult> {
@@ -126,7 +135,7 @@ export async function showSystemPrompt(projectDir: string, opts: ShowOptions): P
 
   if (opts.json) {
     return {
-      content: mergeContent(builtIn, extension),
+      content: mergeContent(builtIn, extension, 'System prompt'),
       hasExtension: !!extension,
       builtIn,
       extension: extension ?? undefined,
@@ -134,7 +143,7 @@ export async function showSystemPrompt(projectDir: string, opts: ShowOptions): P
   }
 
   return {
-    content: mergeContent(builtIn, extension),
+    content: mergeContent(builtIn, extension, 'System prompt'),
     hasExtension: !!extension,
   };
 }
@@ -154,7 +163,7 @@ export async function showBootPrompt(projectDir: string, opts: ShowOptions): Pro
 
   if (opts.json) {
     return {
-      content: mergeContent(builtIn, extension),
+      content: mergeContent(builtIn, extension, 'Boot prompt'),
       hasExtension: !!extension,
       builtIn,
       extension: extension ?? undefined,
@@ -162,7 +171,7 @@ export async function showBootPrompt(projectDir: string, opts: ShowOptions): Pro
   }
 
   return {
-    content: mergeContent(builtIn, extension),
+    content: mergeContent(builtIn, extension, 'Boot prompt'),
     hasExtension: !!extension,
   };
 }
@@ -274,7 +283,7 @@ export async function showMethodology(projectDir: string, opts: ShowOptions): Pr
 
   if (opts.json) {
     return {
-      content: mergeContent(builtIn, extension),
+      content: mergeContent(builtIn, extension, 'Methodology'),
       hasExtension: !!extension,
       builtIn,
       extension: extension ?? undefined,
@@ -282,7 +291,7 @@ export async function showMethodology(projectDir: string, opts: ShowOptions): Pr
   }
 
   return {
-    content: mergeContent(builtIn, extension),
+    content: mergeContent(builtIn, extension, 'Methodology'),
     hasExtension: !!extension,
   };
 }

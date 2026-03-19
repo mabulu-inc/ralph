@@ -15,6 +15,11 @@ import {
   runMigrate,
   run,
 } from '../commands/migrate.js';
+import {
+  registerSnapshot,
+  clearSnapshots,
+  initializeCurrentSnapshots,
+} from '../templates/snapshots/index.js';
 
 import { defaultBootPromptTemplate } from '../templates/boot-prompt.js';
 import { defaultSystemPromptTemplate } from '../templates/system-prompt.js';
@@ -425,7 +430,7 @@ describe('formatPlan', () => {
     const output = formatPlan(analyses);
     expect(output).toContain('REMOVE');
     expect(output).toContain('boot.md');
-    expect(output).toContain('EXTRACT');
+    expect(output).toContain('MODIFIED');
     expect(output).toContain('system.md');
     expect(output).toContain('SKIP');
     expect(output).toContain('RALPH-METHODOLOGY.md');
@@ -479,7 +484,7 @@ describe('run (CLI entry point)', () => {
   it('prints nothing-to-migrate when no legacy files', async () => {
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
     await run([]);
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Nothing to migrate'));
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('No legacy files found'));
   });
 
   it('prints plan and dry-run message with --dry-run', async () => {
@@ -535,5 +540,157 @@ describe('CLI registration', () => {
     const { dispatch } = await import('../cli.js');
     const result = dispatch(['migrate', '--dry-run']);
     expect(result).toEqual({ action: 'migrate', args: ['--dry-run'] });
+  });
+});
+
+describe('multi-version snapshot matching', () => {
+  beforeEach(() => {
+    clearSnapshots();
+    initializeCurrentSnapshots();
+  });
+
+  afterEach(() => {
+    clearSnapshots();
+  });
+
+  it('recognizes a file matching an older version snapshot', async () => {
+    const olderTemplate = '# Old System Prompt\n\nThis was the v0.5.0 system prompt.';
+    registerSnapshot({ type: 'system-prompt', version: '0.5.0', content: olderTemplate });
+
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'system.md'), olderTemplate);
+
+    const analyses = await analyzeProject(tmpDir);
+    const sysAnalysis = analyses.find((a) => a.relativePath === 'docs/prompts/system.md');
+    expect(sysAnalysis).toBeDefined();
+    expect(sysAnalysis!.classification).toBe('exact-match');
+    expect(sysAnalysis!.matchedVersion).toBe('0.5.0');
+  });
+
+  it('finds closest snapshot for modified older template via similarity', async () => {
+    const olderTemplate = '# Boot Prompt\n\nLine A\nLine B\nLine C\nLine D\nLine E';
+    registerSnapshot({ type: 'boot-prompt', version: '0.5.0', content: olderTemplate });
+
+    const userFile =
+      '# Boot Prompt\n\nLine A\nLine B\nLine C\nLine D\nLine E\n\n## My Addition\n\nExtra content';
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(join(tmpDir, 'docs', 'prompts', 'boot.md'), userFile);
+
+    const analyses = await analyzeProject(tmpDir);
+    const bootAnalysis = analyses.find((a) => a.relativePath === 'docs/prompts/boot.md');
+    expect(bootAnalysis).toBeDefined();
+    expect(bootAnalysis!.classification).toBe('modified');
+    expect(bootAnalysis!.matchedVersion).toBeDefined();
+    expect(bootAnalysis!.userContent).toContain('My Addition');
+    expect(bootAnalysis!.userLineCount).toBeGreaterThan(0);
+  });
+
+  it('classifies file as no-match when similarity is below threshold', async () => {
+    registerSnapshot({
+      type: 'system-prompt',
+      version: '0.5.0',
+      content: '# System Prompt\n\nTemplate content A\nTemplate content B',
+    });
+
+    await mkdir(join(tmpDir, 'docs', 'prompts'), { recursive: true });
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'system.md'),
+      '# Completely Custom\n\nNothing to do with ralph templates at all.\nThis is entirely user content.',
+    );
+
+    const analyses = await analyzeProject(tmpDir);
+    const sysAnalysis = analyses.find((a) => a.relativePath === 'docs/prompts/system.md');
+    expect(sysAnalysis).toBeDefined();
+    expect(sysAnalysis!.classification).toBe('no-match');
+  });
+});
+
+describe('improved status messages', () => {
+  it('formatPlan shows version info for exact matches', () => {
+    const analyses: FileAnalysis[] = [
+      {
+        relativePath: 'docs/prompts/boot.md',
+        classification: 'exact-match',
+        userContent: undefined,
+        matchedVersion: '0.6.0',
+      },
+    ];
+    const output = formatPlan(analyses);
+    expect(output).toContain('REMOVE');
+    expect(output).toContain('v0.6.0');
+    expect(output).not.toContain('unrecognized');
+  });
+
+  it('formatPlan shows version and line count for modified files', () => {
+    const analyses: FileAnalysis[] = [
+      {
+        relativePath: 'docs/prompts/system.md',
+        classification: 'modified',
+        userContent: 'line 1\nline 2\nline 3',
+        matchedVersion: '0.6.0',
+        userLineCount: 3,
+      },
+    ];
+    const output = formatPlan(analyses);
+    expect(output).toContain('MODIFIED');
+    expect(output).toContain('v0.6.0');
+    expect(output).toContain('3 lines');
+  });
+
+  it('formatPlan shows "not a ralph file" for no-match files', () => {
+    const analyses: FileAnalysis[] = [
+      {
+        relativePath: 'docs/RALPH-METHODOLOGY.md',
+        classification: 'no-match',
+        userContent: undefined,
+      },
+    ];
+    const output = formatPlan(analyses);
+    expect(output).toContain('SKIP');
+    expect(output).toContain('not a ralph file');
+    expect(output).not.toContain('unrecognized');
+  });
+
+  it('never contains the word "unrecognized" in any status', () => {
+    const analyses: FileAnalysis[] = [
+      {
+        relativePath: 'a.md',
+        classification: 'exact-match',
+        userContent: undefined,
+        matchedVersion: '0.6.0',
+      },
+      {
+        relativePath: 'b.md',
+        classification: 'modified',
+        userContent: 'x',
+        matchedVersion: '0.6.0',
+        userLineCount: 1,
+      },
+      { relativePath: 'c.md', classification: 'no-match', userContent: undefined },
+    ];
+    const output = formatPlan(analyses);
+    expect(output.toLowerCase()).not.toContain('unrecognized');
+  });
+});
+
+describe('nothing to migrate message', () => {
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let cwdSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    cwdSpy?.mockRestore();
+  });
+
+  it('shows built-in-first architecture message when no legacy files', async () => {
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+    await run([]);
+    const allOutput = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    expect(allOutput).toContain('built-in-first architecture');
+    expect(allOutput).toContain('No migration needed');
   });
 });

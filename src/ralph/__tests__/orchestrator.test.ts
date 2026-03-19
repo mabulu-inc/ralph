@@ -1378,6 +1378,47 @@ describe('LoopOrchestrator', () => {
     expect(typeof state.startedAt).toBe('string');
   });
 
+  it('warns about legacy files during preflight without blocking', async () => {
+    resetRegistry();
+    resetProviderInit();
+    await setupProject();
+
+    // Create a legacy prompt file that matches a historical snapshot
+    await writeFile(
+      join(tmpDir, 'docs', 'prompts', 'system.md'),
+      '# Old system prompt from v0.5.0',
+    );
+
+    // Register a snapshot that matches this content
+    const {
+      registerSnapshot: regSnap,
+      initializeCurrentSnapshots: initSnaps,
+      clearSnapshots: clearSnaps,
+    } = await import('../templates/snapshots/index.js');
+    clearSnaps();
+    initSnaps();
+    regSnap({
+      type: 'system-prompt',
+      version: '0.5.0',
+      content: '# Old system prompt from v0.5.0',
+    });
+
+    mockChildProcess();
+    monitorProcess.mockResolvedValue({ exitCode: 0, timedOut: false });
+
+    const orchestrator = new LoopOrchestrator(tmpDir, defaultOpts());
+    await orchestrator.execute();
+
+    const output = logSpy.mock.calls.map((c) => c[0]).join('\n');
+    // Should warn about legacy files
+    expect(output).toContain('Legacy prompt files detected');
+    expect(output).toContain('ralph migrate');
+    // Should still proceed — not a blocker
+    expect(spawnWithCapture).toHaveBeenCalled();
+
+    clearSnaps();
+  });
+
   it('detects new tasks added during the loop and logs a notice', async () => {
     resetRegistry();
     resetProviderInit();
