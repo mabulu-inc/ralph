@@ -78,7 +78,7 @@ Ralph reads project configuration from a `ralph.config.json` file at the project
 - **Testing framework** — e.g., Vitest, Jest, pytest
 - **Quality check** — the command that must pass before committing (e.g., `pnpm check`)
 - **Test command** — the command to run tests (e.g., `pnpm test`)
-- **Agent** — which AI coding agent to use (default: `claude`). See §10 for supported agents.
+- **Agent** — which AI coding agent to use (default: `claude`). See §11 for supported agents.
 - **Model** — which model to use (e.g., `claude-sonnet-4-5-20250514`). If omitted, the agent's default model is used.
 
 ### 2.2 Optional Config
@@ -137,7 +137,7 @@ The main AI development loop. Runs the configured AI coding agent in stateless i
 3. **Clean slate** — discard unstaged changes from crashed iterations, except in protected planning paths (`docs/tasks/`, `docs/PRD.md`, `docs/prompts/`, `docs/RALPH-METHODOLOGY.md`, `ralph.config.json`). These human-authored planning artifacts must survive the clean slate so users can queue task files, PRD edits, and prompt changes between iterations without committing first.
 4. **Find next task** — scan task files, select lowest-numbered eligible TODO
 5. **Build prompt** — load the boot prompt template from `docs/prompts/boot.md`, interpolate task and config variables
-6. **Launch agent** — spawn the configured agent CLI with the rendered prompt and resolved model (task-level model overrides project default; see §10)
+6. **Launch agent** — spawn the configured agent CLI with the rendered prompt and resolved model (task-level model overrides project default; see §11)
 7. **Monitor** — track progress via the agent's output stream
 8. **Timeout** — kill iterations exceeding the time limit
 9. **Commit detection** — after a commit lands, end the iteration (one task per iteration)
@@ -192,7 +192,39 @@ This context is injected into the boot prompt so the agent can avoid repeating t
 
 - All tasks are DONE
 - Reached max iterations
+- Loop budget exceeded
+- No eligible tasks (all remaining are blocked or have unmet dependencies)
 - User interrupt (Ctrl+C)
+
+Every exit must produce a clear, reason-specific console message that includes the exit reason and remaining task counts (e.g., `"Loop complete — iteration limit (10) reached, 13 TODO tasks remaining"`). The ambiguous message `"Loop complete"` without context is not acceptable — developers running ralph unattended must be able to determine why it stopped from the terminal output alone.
+
+**Structured exit log:**
+
+On exit, ralph must write `.ralph-logs/loop-end.json` containing:
+
+- `reason` — one of `all_done`, `iteration_limit`, `budget_exceeded`, `no_eligible_tasks`, `user_interrupt`
+- `endedAt` — ISO 8601 timestamp
+- `iterationsUsed` — number of iterations completed
+- `iterationsLimit` — configured iteration limit (0 = unlimited)
+- `totalSpend` — total cost across all iterations
+- `tasksCompleted` — number of tasks completed this run
+- `tasksRemaining` — number of TODO tasks at exit
+- `lastTaskId` — ID of the last task attempted
+
+This file is consumed by `ralph monitor` to display the exit reason when the loop is stopped.
+
+**Iteration state file:**
+
+At the start of each iteration, ralph must write `.ralph-logs/loop-state.json` containing the current iteration number, iteration limit, and current task ID. This enables `ralph monitor` to display iteration progress (e.g., `Iteration: 5/10`) in real time.
+
+**Dynamic task detection:**
+
+At the top of each iteration, after scanning tasks, ralph must compare the current task total against the `loop-start.json` snapshot total. If new tasks have been added to `docs/tasks/` while the loop is running, ralph must:
+
+1. Log a notice: `"[Iteration N] detected M new tasks (total: T)"`
+2. Update the `loop-start.json` total so monitor progress bars remain accurate
+
+This detection must piggyback on the existing task scan — no filesystem watchers, inotify, or additional polling. The loop already calls `scanTasks()` each iteration; comparing counts is sufficient.
 
 **Cleanup on exit:**
 
@@ -207,6 +239,8 @@ Real-time status display showing progress and current activity.
 
 - Ralph status (RUNNING / BETWEEN TASKS / STOPPED)
 - Progress bar with task counts (done/total, percentage)
+- Iteration progress — current iteration and limit read from `.ralph-logs/loop-state.json` (e.g., `Iteration: 5/10` or `Iteration: 5/∞` when unlimited). Only shown when the file exists (i.e., when a loop is or was running).
+- Exit reason — when status is STOPPED and `.ralph-logs/loop-end.json` exists, display why the loop stopped (e.g., `Stopped: iteration limit reached (10/10), 13 tasks remaining`). This is critical for developers returning to their terminal after an unattended run.
 - Current task ID and title
 - Phase timeline with per-phase durations — completed phases show elapsed time and the active phase shows a live timer that updates each refresh, both using the same format (e.g., `● Boot (45s) → ● Red (1m 12s) → ● Green (2m 30s) → ○ Verify → ○ Commit`)
 - Phases should always display when RUNNING (even if no phase markers found yet — show all as `○`)
@@ -326,6 +360,15 @@ Ralph stores iteration logs in `.ralph-logs/` as JSONL files.
 - Naming: `T-NNN-YYYYMMDD-HHMMSS.jsonl`
 - Content: Agent's JSON stream output (tool calls, text, usage, errors), enriched with timestamps
 - Used by `ralph cost` and `ralph monitor` for analysis
+
+### 4.0 Loop Metadata Files
+
+In addition to per-task JSONL logs, ralph writes structured JSON metadata files to `.ralph-logs/`:
+
+- **`loop-start.json`** — Written at loop start. Contains `doneAtStart`, `total`, and `startedAt`. The `total` field is updated in-place when new tasks are detected mid-run.
+- **`loop-state.json`** — Written at the start of each iteration. Contains `iteration` (current), `iterationsLimit` (configured cap, 0 = unlimited), `currentTaskId`, and `startedAt`. Consumed by `ralph monitor` for iteration progress display.
+- **`loop-end.json`** — Written on loop exit. Contains `reason`, `endedAt`, `iterationsUsed`, `iterationsLimit`, `totalSpend`, `tasksCompleted`, `tasksRemaining`, and `lastTaskId`. Consumed by `ralph monitor` to display exit reason when stopped.
+- **`ralph.pid`** — Process ID file for running-state detection.
 
 ### 4.1 Timestamp Injection
 
@@ -510,18 +553,86 @@ Minimize dependencies to keep the CLI lightweight, but do not hand-roll logic fo
 
 All strings passed as arguments to shell commands (task IDs, titles, file paths, config values) must be treated as untrusted. Use array-form `execFile`/`spawn` (never shell-interpolated strings), and sanitize or validate inputs before passing them to external processes as a defense-in-depth measure.
 
-## 9. Non-Goals
+## 9. Agent Roles
+
+Each iteration of `ralph loop` is not a single-perspective coding session. It is a structured collaboration between specialized agent roles, each contributing focused expertise at specific phases. The AI agent adopts each role in sequence, producing explicit commentary from that role's perspective. This commentary is part of the agent's output stream and is captured in the iteration's JSONL log file, giving full transparency into the reasoning behind every decision.
+
+Users of ralph should understand that each iteration involves these roles — the log file is the record of their collaboration.
+
+### 9.1 Role Definitions
+
+| Role                                     | Focus                           | Responsibility                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Product Manager (PM)**                 | The "Why" and "What"            | Bridges business goals to technical execution. Validates that the task aligns with PRD requirements and acceptance criteria. Ensures the implementation scope matches what was asked for — no more, no less.                                                                                      |
+| **System Architect**                     | The "How" at a high level       | Designs the structural blueprint. Reviews the approach for scalability, modularity, and separation of concerns. Prevents spaghetti code that slows future enhancements.                                                                                                                           |
+| **Security Engineer (AppSec)**           | Shift-left security             | Reviews designs for vulnerabilities before code is written. Validates that the implementation follows OWASP guidelines and does not introduce injection, XSS, or other common attack vectors. Security is not a final check — it is integrated from the start.                                    |
+| **UX/UI Designer**                       | Intuitive design                | Ensures user-facing changes are intuitive and consistent. Reviews CLI output formatting, error messages, and user flows. Prevents costly mid-development pivots by catching usability issues early. Participates only when the task has user-facing surface.                                      |
+| **Frontend & Backend Engineers**         | Clean, modular code             | Write the actual implementation. Focus on DRY (Don't Repeat Yourself), SRP (Single Responsibility Principle), and other software engineering principles. Code should be an effective abstraction that enables confident refactoring.                                                              |
+| **DevOps / SRE**                         | CI/CD and operational readiness | Evaluates the impact on build pipelines, deployment, and operational concerns. Ensures changes don't break the build, introduce slow tests, or create operational blind spots.                                                                                                                    |
+| **SDET (Software Dev Engineer in Test)** | Code that tests code            | Designs the test strategy and builds automated regression suites. Critically, the SDET verifies that TDD actually drove the development — tests must precede implementation, not be added as an afterthought. Evidence of test-first development (failing tests before passing code) is required. |
+| **Technical Lead**                       | Code review and mentorship      | Performs rigorous code review as the primary defense for long-term quality and maintainability. Evaluates naming, structure, error handling, and whether the code will be comprehensible to the next developer.                                                                                   |
+| **DBA / Data Engineer**                  | Data integrity and performance  | Reviews schema designs, query patterns, and data access layers. Ensures schemas are robust enough to handle growth without requiring a rewrite. Participates only when the task involves data models or persistence.                                                                              |
+
+### 9.2 Role Participation by Phase
+
+Roles participate at specific points in the iteration where their expertise has the highest leverage. Some roles act as **gates** — the iteration must not proceed past that phase without their explicit approval.
+
+| Phase                               | Active Roles                                                                                                                                                                                                                                                                                                                                                                                                          | Gate?                                                                                                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Boot** (task analysis & approach) | PM validates task/PRD alignment and acceptance criteria. Architect designs the structural approach. Security Engineer reviews for threat surface. DBA reviews if data models are involved. UX reviews if user-facing changes exist.                                                                                                                                                                                   | **Yes** — the approach must be agreed before any code is written. Each participating role must produce explicit commentary approving or adjusting the plan. |
+| **Red** (test writing)              | SDET defines the test strategy and coverage requirements. Engineers write the failing tests.                                                                                                                                                                                                                                                                                                                          | No                                                                                                                                                          |
+| **Green** (implementation)          | Engineers write the minimum code to pass tests. Architect provides structural guidance if the implementation drifts from the agreed approach.                                                                                                                                                                                                                                                                         | No                                                                                                                                                          |
+| **Verify** (quality gates)          | SDET audits TDD compliance — verifies that tests were written before implementation and are not afterthought assertions bolted onto working code. Security Engineer scans the implementation for vulnerabilities. Tech Lead performs code review for quality, naming, structure, and maintainability. DevOps/SRE evaluates CI/CD and operational impact. DBA reviews query patterns and schema changes if applicable. | **Yes** — all applicable reviews must pass. If a review identifies an issue, it must be resolved before proceeding to Commit.                               |
+| **Commit**                          | Engineers produce the clean commit.                                                                                                                                                                                                                                                                                                                                                                                   | No                                                                                                                                                          |
+
+### 9.3 Commentary Format
+
+Each role's commentary must be clearly attributed in the agent's output so it is identifiable in the log. The format uses a role marker:
+
+```
+[ROLE: Product Manager] Task T-042 aligns with PRD §5.3. Acceptance criteria require...
+[ROLE: System Architect] Proposed approach: extract the parser into a separate module...
+[ROLE: Security Engineer] No external input surfaces in this task. No threat model concerns.
+```
+
+Roles that are not applicable to a given task (e.g., DBA for a pure UI task, UX for a backend-only task) must explicitly state they are skipping with a reason:
+
+```
+[ROLE: UX/UI Designer] Skipping — this task has no user-facing surface.
+[ROLE: DBA / Data Engineer] Skipping — no data models or persistence changes.
+```
+
+This ensures the log is a complete record — every role is accounted for in every iteration.
+
+### 9.4 TDD Compliance Audit
+
+The SDET role during the Verify phase has a specific mandate: verify that TDD actually drove the development. This is not a check for test existence — it is a check for test-first discipline. The SDET must look for evidence that:
+
+- Tests were written during the Red phase (before implementation)
+- Tests initially failed (they tested behavior that didn't exist yet)
+- Implementation in the Green phase was the minimum needed to make tests pass
+- Tests are semantic assertions about behavior, not string-matching or implementation-coupled checks
+
+If the SDET finds evidence that tests were written after the implementation (e.g., tests that could only have been written by someone who already knew the implementation details, or tests that assert on implementation artifacts rather than behavior), this must be flagged as a review failure.
+
+### 9.5 Log Transparency
+
+All role commentary is part of the agent's standard output stream and is captured in the iteration's `.ralph-logs/T-NNN-*.jsonl` file. No separate log files or channels are needed — the `[ROLE: ...]` markers make each role's contribution identifiable within the existing log format.
+
+`ralph monitor` displays the agent's text output in real time (§3.3). When role commentary is the latest output, the monitor's "Last output" line will naturally show it, giving the developer visibility into which role is currently active.
+
+## 10. Non-Goals
 
 - Ralph does NOT manage or install AI coding agents — it assumes the configured CLI is available
 - Ralph does NOT handle CI/CD — it's a local development tool
 - Ralph does NOT require a database — DB setup is project-specific
 - Ralph does NOT prescribe a specific language or framework — it works with any stack
 
-## 10. Agent Providers
+## 11. Agent Providers
 
 Ralph supports multiple AI coding agents through a provider adapter. Each provider maps ralph's needs onto the agent's CLI interface.
 
-### 10.1 Provider Interface
+### 11.1 Provider Interface
 
 Every provider must supply:
 
@@ -534,7 +645,7 @@ Every provider must supply:
 | **instructionsFile**           | Path to the agent's project-level instructions file                                                     |
 | **parseOutput(stream)**        | Normalize the agent's output stream into ralph's internal event format                                  |
 
-### 10.2 Supported Agents
+### 11.2 Supported Agents
 
 | Agent                     | Binary   | Print mode        | JSON output                   | Max turns       | Instructions file         |
 | ------------------------- | -------- | ----------------- | ----------------------------- | --------------- | ------------------------- |
@@ -544,10 +655,10 @@ Every provider must supply:
 | **Continue CLI**          | `cn`     | `-p`              | `--output-format stream-json` | `--max-turns N` | `~/.continue/config.yaml` |
 | **Cursor CLI**            | `cursor` | `-p`              | `--output-format stream-json` | N/A             | `.cursor/rules/`          |
 
-### 10.3 Behavior When Max Turns Is Unsupported
+### 11.3 Behavior When Max Turns Is Unsupported
 
 For agents that do not support `--max-turns`, ralph relies on its own timeout mechanism (§3.2) to bound iteration length. The complexity scaling tiers still apply to timeout values.
 
-### 10.4 Adding New Providers
+### 11.4 Adding New Providers
 
-New agents can be supported by implementing the provider interface (§10.1) and registering the provider. No changes to the orchestrator or prompt system should be required.
+New agents can be supported by implementing the provider interface (§11.1) and registering the provider. No changes to the orchestrator or prompt system should be required.
