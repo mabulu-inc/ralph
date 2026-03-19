@@ -126,6 +126,38 @@ describe('T-091: Documentation audit', () => {
     });
   });
 
+  describe('T-092: extension-api.md template variable table', () => {
+    const content = read('docs-site/src/content/docs/reference/extension-api.md');
+
+    it('does not list {{config.database}} in the template variable table', () => {
+      // Extract the Template Variable Reference table section
+      const tableSection =
+        content.split(/## Template Variable Reference/)[1]?.split(/^##/m)[0] ?? '';
+      expect(tableSection).not.toMatch(/\{\{config\.database\}\}/);
+    });
+  });
+
+  describe('T-092: commands/migrate.md', () => {
+    const content = read('docs-site/src/content/docs/commands/migrate.md');
+
+    it('does not reference ralph update by name', () => {
+      expect(content).not.toMatch(/ralph update/);
+    });
+  });
+
+  describe('T-092: getting-started/configuration.md', () => {
+    const content = read('docs-site/src/content/docs/getting-started/configuration.md');
+
+    it('does not claim init generates agent instructions files', () => {
+      expect(content).not.toMatch(/ralph generates during.*init/i);
+      expect(content).not.toMatch(/init.*generates/i);
+    });
+
+    it('explains that ralph does not manage agent instructions files', () => {
+      expect(content).toMatch(/ralph does not manage agent instructions/i);
+    });
+  });
+
   describe('reference pages exist', () => {
     it('task-file-api.md exists', () => {
       expect(

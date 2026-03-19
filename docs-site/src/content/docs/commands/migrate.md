@@ -9,7 +9,7 @@ pnpm dlx @smplcty/ralph migrate [options]
 npx @smplcty/ralph migrate [options]
 ```
 
-Migrate legacy ralph prompt files from the old copy-and-edit model to the built-in-first architecture. This command analyzes files that were previously copied into your project by `ralph init` or `ralph update` and determines the appropriate action for each.
+Migrate legacy ralph prompt files from the old copy-and-edit model to the built-in-first architecture. This command analyzes files that were copied into your project by earlier versions of ralph and determines the appropriate action for each.
 
 ## How It Works
 

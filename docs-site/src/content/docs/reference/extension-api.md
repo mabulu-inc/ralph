@@ -45,7 +45,6 @@ Template variables use `{{variable}}` syntax and are interpolated in both built-
 | `{{config.qualityCheck}}`     | Quality check command (e.g., `pnpm check`)                       |
 | `{{config.testCommand}}`      | Test command (e.g., `pnpm test`)                                  |
 | `{{config.fileNaming}}`       | File naming convention (e.g., `kebab-case`, blank if unset)      |
-| `{{config.database}}`         | Database info (e.g., `PostgreSQL`, blank if unset)                |
 | `{{project.rules}}`           | Contents of `docs/prompts/rules.md`                               |
 | `{{codebaseIndex}}`           | Auto-generated file/export index                                  |
 | `{{retryContext}}`            | Context from a previous failed attempt (empty on first attempt)   |

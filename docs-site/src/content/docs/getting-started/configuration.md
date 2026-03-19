@@ -49,14 +49,4 @@ The agent is auto-detected during `ralph init` based on which CLIs are installed
 
 ## Agent Instructions Files
 
-Each agent has its own instructions file that ralph generates during `init`:
-
-| Agent     | Instructions File         |
-| --------- | ------------------------- |
-| Claude    | `.claude/CLAUDE.md`       |
-| Gemini    | `GEMINI.md`               |
-| Codex     | `AGENTS.md`               |
-| Continue  | `~/.continue/config.yaml` |
-| Cursor    | `.cursor/rules/`          |
-
-These files contain a project goal and a pointer to the Ralph Methodology — all behavioral rules flow through the boot prompt template, not the instructions file.
+Ralph does not manage agent instructions files. The loop prompt is self-contained — all methodology content, roles, and behavioral rules are injected directly into the agent session. If you want a `.claude/CLAUDE.md` or similar file for your own manual usage outside of ralph, that is your file to manage.
