@@ -58,23 +58,49 @@ Analyzes the most recent attempt to classify the failure and provide actionable 
 - **Last error** — the error message that caused the failure
 - **Recommendations** — suggested actions to resolve the issue
 
-## Project Coaching
+## Task-Specific Coaching
+
+```bash
+ralph review T-042 --coach
+```
+
+When `--coach` is combined with a task ID, the coaching is specific to that task. Ralph gathers the task's execution data (log, role commentary, phase durations, retries, outcome) and sends it to the configured AI agent for intelligent analysis. This is not a heuristic check — it is an AI-powered review that understands context.
+
+The AI receives:
+
+- The task file content (description, AC, hints, etc.)
+- The execution log summary (phases reached, role commentary, errors, outcome)
+- Retry history if applicable
+- The project's extension files and role customizations for context
+
+The AI produces:
+
+- **What went well** — specific strengths in the task definition and execution
+- **What could improve** — specific, actionable suggestions
+- **Role observations** — which roles provided valuable input and how their commentary influenced the outcome
+- **Task definition quality** — whether the description, AC, and hints were sufficient, with specific improvement suggestions
+- **Suggested changes** — concrete edits to the task file, extensions, or role customizations
+
+## Project-Wide Coaching
 
 ```bash
 ralph review --coach
 ```
 
-Analyzes the entire project for improvement opportunities:
+When `--coach` is used without a task ID, ralph analyzes patterns across all tasks and sends the aggregated data to the AI for project-level coaching. The AI receives summaries of all completed and failed tasks, not just heuristic counts.
 
-- **Task quality** — identifies tasks with missing acceptance criteria, vague descriptions, or missing PRD references
-- **Role effectiveness** — evaluates how well agent roles are being utilized
-- **Extension health** — checks extension files for issues
+The AI produces:
+
+- **Pattern analysis** — recurring issues across tasks (e.g., tasks consistently exceeding turn budgets)
+- **Role effectiveness** — which roles are adding value vs. rubber-stamping, based on actual commentary content
+- **Extension recommendations** — specific rules, role overrides, or system prompt extensions that would improve outcomes
+- **Task authoring guidance** — project-specific advice on how to write better tasks for this codebase
 
 ## Options
 
 | Flag                   | Description                              |
 | ---------------------- | ---------------------------------------- |
 | `-d, --diagnose`       | Analyze failure and provide diagnosis    |
-| `-c, --coach`          | Project-wide coaching suggestions        |
+| `-c, --coach`          | Task-specific or project-wide AI coaching |
 | `-v, --verbose`        | Show full role commentary (not truncated)|
 | `-j, --json`           | Output as JSON                           |

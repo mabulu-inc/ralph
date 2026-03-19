@@ -18,15 +18,14 @@ Each iteration is a structured collaboration between [9 specialized agent roles]
 The iteration flow:
 
 1. **Pre-flight** — verify agent CLI is installed, `docs/tasks/` exists, and quality check passes (aborts by default if it fails — use `--allow-dirty` to override)
-2. **Database** — start Docker containers if configured
-3. **Clean slate** — discard unstaged changes from crashed iterations
-4. **Find next task** — select lowest-numbered eligible TODO
-5. **Build prompt** — assemble the built-in prompt layers with task and config variables
-6. **Launch agent** — spawn the agent CLI with the rendered prompt
-7. **Monitor** — track progress via the agent's output stream
-8. **Timeout** — kill iterations exceeding the time limit
-9. **Commit detection** — end iteration after a commit lands
-10. **Post-iteration** — backfill SHAs, update costs, regenerate milestones, push
+2. **Clean slate** — discard unstaged changes from crashed iterations
+3. **Find next task** — select lowest-numbered eligible TODO
+4. **Build prompt** — assemble the built-in prompt layers with task and config variables
+5. **Launch agent** — spawn the agent CLI with the rendered prompt
+6. **Monitor** — track progress via the agent's output stream
+7. **Timeout** — kill iterations exceeding the time limit
+8. **Commit detection** — end iteration after a commit lands
+9. **Post-iteration** — backfill SHAs, update costs, regenerate milestones, push
 
 Ralph's built-in prompts, roles, and methodology are used directly from the package — they are not read from files in your project. User extensions in `docs/prompts/` are appended to the built-in content at prompt assembly time.
 
@@ -41,7 +40,6 @@ Ralph's built-in prompts, roles, and methodology are used directly from the pack
 | `-v, --verbose`             | Stream agent output to terminal      | off              |
 | `--dry-run`                 | Print config and exit                | off              |
 | `--no-push`                 | Don't auto-push after iterations     | off              |
-| `--no-db`                   | Skip database startup                | off              |
 | `--allow-dirty`             | Proceed despite pre-existing quality-check failures | off |
 | `--agent <name>`            | Override configured agent            | from config      |
 
@@ -73,6 +71,8 @@ The loop stops when:
 
 - All tasks are `DONE`
 - Max iterations reached
+- Loop budget exceeded
+- No eligible tasks (all remaining are blocked or have unmet dependencies)
 - User interrupt (Ctrl+C)
 
 The exit reason is captured and displayed by `ralph monitor`.

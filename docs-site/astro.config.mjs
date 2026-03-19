@@ -49,6 +49,7 @@ export default defineConfig({
             { label: 'task', slug: 'commands/task' },
             { label: 'review', slug: 'commands/review' },
             { label: 'migrate', slug: 'commands/migrate' },
+            { label: 'retry', slug: 'commands/retry' },
             { label: 'kill', slug: 'commands/kill' },
             { label: 'milestones', slug: 'commands/milestones' },
             { label: 'shas', slug: 'commands/shas' },

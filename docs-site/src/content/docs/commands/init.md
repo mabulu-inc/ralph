@@ -20,9 +20,8 @@ Ralph asks for:
 3. **Package manager** — pnpm, npm, yarn, pip, cargo, etc.
 4. **Test framework** — Vitest, Jest, pytest, etc.
 5. **Check command** — the quality gate command (e.g., `pnpm check`)
-6. **Database** — none, PostgreSQL via Docker, etc.
-7. **AI agent** — claude, gemini, codex, continue, cursor (auto-detected from installed CLIs)
-8. **Model** — specific model override (optional, uses agent default)
+6. **AI agent** — claude, gemini, codex, continue, cursor (auto-detected from installed CLIs)
+7. **Model** — specific model override (optional, uses agent default)
 
 ## Generated Files
 
@@ -32,7 +31,6 @@ Ralph asks for:
 | `docs/tasks/T-000.md`     | Infrastructure bootstrap task              |
 | `docs/prompts/rules.md`   | Project-specific rules (editable)          |
 | `ralph.config.json`       | Project configuration                      |
-| Agent instructions file    | Minimal stub (e.g., `.claude/CLAUDE.md`)   |
 
 Ralph's methodology, prompts, and role definitions live in the package code and are used directly at runtime — they are not copied into your project. This means you always get the latest version when you upgrade ralph. See [Customizing Prompts](/simplicity-ralph/guides/customizing-prompts/) for how to extend the built-in content.
 

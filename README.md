@@ -37,9 +37,8 @@ This interactive command scaffolds everything ralph needs:
 - `docs/tasks/T-000.md` — an initial bootstrap task
 - `docs/prompts/rules.md` — project-specific rules (e.g., "all code goes under `src/`")
 - `ralph.config.json` — project configuration (language, test framework, quality check command, etc.)
-- Agent instructions file (e.g., `.claude/CLAUDE.md`) — a minimal stub pointing to the methodology
 
-Ralph's built-in prompts, roles, and methodology are used directly from the package at runtime — they are not copied into your project. This means you always get the latest version when you upgrade ralph.
+Ralph's built-in prompts, roles, and methodology are used directly from the package at runtime — they are not copied into your project. This means you always get the latest version when you upgrade ralph. Ralph does not generate or manage agent instructions files (`.claude/CLAUDE.md`, etc.) — the loop prompt is fully self-contained.
 
 ### 2. Write your PRD
 

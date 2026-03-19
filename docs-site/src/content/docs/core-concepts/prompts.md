@@ -53,7 +53,6 @@ Ralph replaces `{{variable}}` placeholders before sending the prompt. Template v
 | `{{config.qualityCheck}}`     | Quality check command                              |
 | `{{config.testCommand}}`      | Test command                                       |
 | `{{config.fileNaming}}`       | File naming convention                             |
-| `{{config.database}}`         | Database info                                      |
 | `{{project.rules}}`           | Contents of `docs/prompts/rules.md`                |
 | `{{codebaseIndex}}`           | Auto-generated file/export index                   |
 | `{{retryContext}}`            | Context from a previous failed attempt             |

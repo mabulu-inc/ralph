@@ -34,12 +34,9 @@ Ralph will prompt you for:
 
 This scaffolds:
 - `docs/PRD.md` — your product requirements document
-- `docs/RALPH-METHODOLOGY.md` — the methodology reference
 - `docs/tasks/T-000.md` — your first infrastructure task
-- `docs/prompts/boot.md` — the boot prompt template
 - `docs/prompts/rules.md` — project-specific rules
 - `ralph.config.json` — project configuration
-- Agent instructions file (e.g., `.claude/CLAUDE.md`)
 
 ## 2. Write Your PRD
 
