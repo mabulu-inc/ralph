@@ -121,7 +121,8 @@ Interactive project bootstrapper. Prompts for project configuration, then create
 - `docs/tasks/T-000.md` — infrastructure bootstrap task
 - `docs/prompts/rules.md` — user-editable project-specific rules included in the boot prompt (see §5.10)
 - `ralph.config.json` — project configuration including agent selection
-- Agent instructions file (e.g., `.claude/CLAUDE.md`, `GEMINI.md`, `AGENTS.md`) — minimal stub with project goal and methodology pointer (no config duplication)
+
+Ralph does NOT generate or manage agent instructions files (`.claude/CLAUDE.md`, `GEMINI.md`, etc.). The loop prompt is fully self-contained — everything the agent needs is sent via the `-p` flag at runtime. Users' own agent instructions files are their property and ralph never touches them. See §11.5.
 
 All methodology content, prompt templates, and role definitions live in ralph's package code and are used directly at runtime — they are never copied into the user's project. See §5 for the built-in-first prompt architecture.
 
@@ -649,7 +650,7 @@ At prompt build time, ralph reads `docs/prompts/rules.md` and injects its conten
 
 `ralph init` generates a default `docs/prompts/rules.md` with a brief comment explaining its purpose and a few example rules. Users edit this file to add their project's conventions.
 
-This keeps agent instructions files (`.claude/CLAUDE.md`, `GEMINI.md`, etc.) thin — they contain only a project goal and a pointer to the methodology. All behavioral rules flow through the prompt template, which is agent-agnostic.
+All behavioral rules flow through the prompt template, which is agent-agnostic. Ralph does not generate or manage agent instructions files (see §11.5).
 
 ## 6. Quality Gates
 
@@ -683,7 +684,7 @@ Operational parameters that change independently of code must be configurable wi
 - **API Pricing** — token prices used by `ralph cost` (currently hardcoded in `commands/cost.ts`)
 - **Complexity Tiers** — scaling thresholds and limits used by `ralph loop` (currently hardcoded in `commands/loop.ts`)
 
-These should be overridable via a config file (e.g., `ralph.config.json` or a section in `.claude/CLAUDE.md`) or environment variables, with sensible defaults baked in.
+These should be overridable via `ralph.config.json` or environment variables, with sensible defaults baked in.
 
 ### 8.3 Process Tree Termination
 
@@ -830,6 +831,7 @@ At prompt build time, ralph merges the built-in role definitions with user custo
 - Ralph does NOT handle CI/CD — it's a local development tool
 - Ralph does NOT require a database — DB setup is project-specific
 - Ralph does NOT prescribe a specific language or framework — it works with any stack
+- Ralph does NOT generate or manage agent instructions files (`.claude/CLAUDE.md`, `GEMINI.md`, etc.) — these belong to the user (see §11.5)
 
 ## 11. Agent Providers
 
@@ -845,18 +847,20 @@ Every provider must supply:
 | **buildArgs(prompt, options)** | Construct the argument array for a headless, single-prompt invocation (including `--model` if provided) |
 | **outputFormat**               | How to request structured (JSON/NDJSON) output, if supported                                            |
 | **supportsMaxTurns**           | Whether the agent accepts a max-turns limit                                                             |
-| **instructionsFile**           | Path to the agent's project-level instructions file                                                     |
+| **supportsSystemPrompt**       | Whether the agent accepts a separate system prompt argument                                             |
 | **parseOutput(stream)**        | Normalize the agent's output stream into ralph's internal event format                                  |
+
+The provider interface does NOT include an `instructionsFile` capability. Ralph's loop prompt is self-contained — it does not depend on or manage agent-specific project instructions files. See §11.5.
 
 ### 11.2 Supported Agents
 
-| Agent                     | Binary   | Print mode        | JSON output                   | Max turns       | Instructions file         |
-| ------------------------- | -------- | ----------------- | ----------------------------- | --------------- | ------------------------- |
-| **Claude Code** (default) | `claude` | `-p`              | `--output-format stream-json` | `--max-turns N` | `.claude/CLAUDE.md`       |
-| **Gemini CLI**            | `gemini` | `-p`              | `--output-format stream-json` | N/A             | `GEMINI.md`               |
-| **Codex CLI**             | `codex`  | `exec` subcommand | `--json`                      | N/A             | `AGENTS.md`               |
-| **Continue CLI**          | `cn`     | `-p`              | `--output-format stream-json` | `--max-turns N` | `~/.continue/config.yaml` |
-| **Cursor CLI**            | `cursor` | `-p`              | `--output-format stream-json` | N/A             | `.cursor/rules/`          |
+| Agent                     | Binary   | Print mode        | JSON output                   | Max turns       |
+| ------------------------- | -------- | ----------------- | ----------------------------- | --------------- |
+| **Claude Code** (default) | `claude` | `-p`              | `--output-format stream-json` | `--max-turns N` |
+| **Gemini CLI**            | `gemini` | `-p`              | `--output-format stream-json` | N/A             |
+| **Codex CLI**             | `codex`  | `exec` subcommand | `--json`                      | N/A             |
+| **Continue CLI**          | `cn`     | `-p`              | `--output-format stream-json` | `--max-turns N` |
+| **Cursor CLI**            | `cursor` | `-p`              | `--output-format stream-json` | N/A             |
 
 ### 11.3 Behavior When Max Turns Is Unsupported
 
@@ -865,6 +869,42 @@ For agents that do not support `--max-turns`, ralph relies on its own timeout me
 ### 11.4 Adding New Providers
 
 New agents can be supported by implementing the provider interface (§11.1) and registering the provider. No changes to the orchestrator or prompt system should be required.
+
+### 11.5 Agent Instructions File Independence
+
+Ralph does NOT generate, manage, or depend on agent-specific project instructions files (`.claude/CLAUDE.md`, `GEMINI.md`, `AGENTS.md`, `.cursor/rules/`, `.continue/config.yaml`).
+
+**Rationale:**
+
+- The loop prompt (system prompt + boot prompt) is fully self-contained. Everything the agent needs to execute a task — methodology, roles, task description, config, codebase index — is sent via the `-p` flag at runtime. Agent instructions files are redundant with the loop prompt.
+- These files belong to the user, not to ralph. Users may have their own agent instructions for manual coding sessions, project-specific AI guidance, or team conventions that have nothing to do with ralph. Ralph must not overwrite, modify, or assume ownership of these files.
+- Previous versions of ralph generated agent instructions files during `ralph init` and silently overwrote them during `ralph update`. This caused data loss when users had added their own content. This behavior is removed.
+
+**Migration:** Users with legacy ralph-generated agent instructions files can use `ralph migrate` (§3.11) to detect and preserve any customizations.
+
+### 11.6 AI-Agnostic Workflow
+
+Ralph is designed so that users can use **any AI assistant** — not just the loop's configured agent — to plan tasks, create task files, analyze results, and improve their project. The loop agent executes tasks; everything else is open.
+
+**Planning and task creation:**
+
+- `ralph task "Title" --dry-run` outputs a properly-formatted task scaffold that any AI can review and fill in
+- `ralph show task T-NNN` shows what the agent will receive, so any AI can verify task quality before execution
+- The Task File API (§12.2) is a documented, stable format — any AI that can read the docs can author task files
+- Users can ask their preferred AI (Claude Code, Cursor, Copilot, ChatGPT, etc.) to decompose a PRD into task files using the format documented in the README and docs site
+
+**Reviewing and coaching:**
+
+- `ralph review T-NNN --json` outputs structured execution data that any AI can analyze
+- `ralph review --coach --json` outputs structured improvement suggestions
+- The JSONL logs in `.ralph-logs/` are readable by any tool — they contain the full agent output including role commentary, phase markers, tool calls, and errors
+- Users can feed `ralph review` output to their preferred AI for deeper analysis or alternative perspectives
+
+**Key principle:** Ralph commands that produce analysis (`review`, `show`, `coach`) output to stdout as text or JSON. They do not require a specific AI to consume them. This means the user's workflow can be:
+
+1. Use any AI to plan and write task files
+2. Use `ralph loop` to execute (with whichever agent is configured)
+3. Use any AI to review results, diagnose failures, and refine tasks
 
 ## 12. Public API Contracts
 
