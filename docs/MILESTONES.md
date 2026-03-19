@@ -41,7 +41,7 @@
 - [x] T-014: CI workflow — $0.42
 - [x] T-015: Publish workflow — $0.21
 
-## 8 — Robustness ($16.08)
+## 8 — Robustness ($18.81)
 
 - [x] T-018: Structured Markdown parsing for task and config files — $0.82
 - [x] T-019: Externalize pricing and complexity tier configuration — $0.71
@@ -65,6 +65,7 @@
 - [x] T-069: Smarter dependency parsing and diagnostic "no eligible task" messages — $0.60
 - [x] T-070: Improve monitor labels and add progress bar to "This run" — $0.41
 - [x] T-074: Loop exit visibility, dynamic task detection, and iteration tracking — $1.85
+- [x] T-087: Improve migrate template matching with historical snapshots and content extraction — $2.73
 
 ## 9 — Agent Abstraction ($6.23)
 
@@ -146,4 +147,4 @@
 - [x] T-083: ralph review T-NNN — task execution analysis and failure diagnosis — $1.77
 - [x] T-084: ralph review --coach — project-wide coaching and improvement suggestions — $1.72
 
-**Grand Total: $76.33**
+**Grand Total: $79.06**
