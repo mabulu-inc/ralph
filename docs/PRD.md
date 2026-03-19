@@ -92,7 +92,6 @@ Ralph reads project configuration from a `ralph.config.json` file at the project
 
 ### 2.2 Optional Config
 
-- **Database** — if the project uses a database (Docker setup, connection string)
 - **File naming** — naming convention (kebab-case, snake_case, etc.)
 
 ## 3. Commands
@@ -108,12 +107,11 @@ Interactive project bootstrapper. Prompts for project configuration, then create
 3. Package manager (pnpm, npm, yarn, pip, cargo, etc.)
 4. Test framework (Vitest, Jest, pytest, etc.)
 5. Check command — required. If none exists, ralph helps set one up.
-6. Database (none, PostgreSQL via Docker, etc.)
 
 **Prompts (additional):**
 
-7. AI agent (claude, gemini, codex, continue, cursor — default: auto-detected from installed CLIs, fallback to claude)
-8. Model (e.g., `claude-sonnet-4-5-20250514`, `gemini-2.5-pro` — default: agent's default model)
+6. AI agent (claude, gemini, codex, continue, cursor — default: auto-detected from installed CLIs, fallback to claude)
+7. Model (e.g., `claude-sonnet-4-5-20250514`, `gemini-2.5-pro` — default: agent's default model)
 
 **Creates:**
 
@@ -141,15 +139,14 @@ The main AI development loop. Runs the configured AI coding agent in stateless i
 **Iteration cycle:**
 
 1. **Pre-flight** — verify the configured agent CLI is installed and on PATH, `docs/tasks/` exists. Run `ralph migrate --dry-run` internally — if it finds legacy files to act on, print its plan summary and warn: `Legacy prompt files detected. Run 'ralph migrate' to clean up. Continuing with built-in templates.` The loop proceeds — this is a warning, not a blocker.
-2. **Database** — if project has Docker Compose, start containers before each iteration
-3. **Clean slate** — discard unstaged changes from crashed iterations, except in protected planning paths (`docs/tasks/`, `docs/PRD.md`, `docs/prompts/`, `ralph.config.json`). These human-authored planning artifacts must survive the clean slate so users can queue task files, PRD edits, and prompt changes between iterations without committing first.
-4. **Find next task** — scan task files, select lowest-numbered eligible TODO
-5. **Build prompt** — assemble the prompt from built-in templates and user extensions (see §5), interpolate task and config variables
-6. **Launch agent** — spawn the configured agent CLI with the rendered prompt and resolved model (task-level model overrides project default; see §11)
-7. **Monitor** — track progress via the agent's output stream
-8. **Timeout** — kill iterations exceeding the time limit
-9. **Commit detection** — after a commit lands, end the iteration (one task per iteration)
-10. **Post-iteration** — backfill SHAs, update costs, regenerate milestones, push
+2. **Clean slate** — discard unstaged changes from crashed iterations, except in protected planning paths (`docs/tasks/`, `docs/PRD.md`, `docs/prompts/`, `ralph.config.json`). These human-authored planning artifacts must survive the clean slate so users can queue task files, PRD edits, and prompt changes between iterations without committing first.
+3. **Find next task** — scan task files, select lowest-numbered eligible TODO
+4. **Build prompt** — assemble the prompt from built-in templates and user extensions (see §5), interpolate task and config variables
+5. **Launch agent** — spawn the configured agent CLI with the rendered prompt and resolved model (task-level model overrides project default; see §11)
+6. **Monitor** — track progress via the agent's output stream
+7. **Timeout** — kill iterations exceeding the time limit
+8. **Commit detection** — after a commit lands, end the iteration (one task per iteration)
+9. **Post-iteration** — backfill SHAs, update costs, regenerate milestones, push
 
 **Options:**
 
@@ -160,7 +157,6 @@ The main AI development loop. Runs the configured AI coding agent in stateless i
 - `-v, --verbose` — stream agent output to terminal
 - `--dry-run` — print config and exit
 - `--no-push` — don't auto-push after iterations
-- `--no-db` — skip database startup
 - `--allow-dirty` — proceed even if the quality-check preflight finds pre-existing failures (default: abort)
 - `--agent <name>` — override the configured agent for this run
 
@@ -236,7 +232,6 @@ This detection must piggyback on the existing task scan — no filesystem watche
 
 **Cleanup on exit:**
 
-- Stop database containers (if started)
 - Kill any child processes
 
 ### 3.3 `ralph monitor`
@@ -590,7 +585,6 @@ The built-in boot prompt template supports variable interpolation using `{{varia
 | `{{config.qualityCheck}}`     | e.g., `pnpm check`                                                 |
 | `{{config.testCommand}}`      | e.g., `pnpm test`                                                  |
 | `{{config.fileNaming}}`       | e.g., `kebab-case` (blank if unset)                                |
-| `{{config.database}}`         | e.g., `PostgreSQL` (blank if unset)                                |
 | `{{task.touches}}`            | Comma-separated file paths from the Touches field (blank if unset) |
 | `{{task.hints}}`              | Content of the task's Hints section (blank if no Hints section)    |
 | `{{task.prdContent}}`         | Extracted PRD section content matching the task's PRD Reference    |
@@ -887,7 +881,6 @@ At prompt build time, ralph merges the built-in role definitions with user custo
 
 - Ralph does NOT manage or install AI coding agents — it assumes the configured CLI is available
 - Ralph does NOT handle CI/CD — it's a local development tool
-- Ralph does NOT require a database — DB setup is project-specific
 - Ralph does NOT prescribe a specific language or framework — it works with any stack
 - Ralph does NOT generate or manage agent instructions files (`.claude/CLAUDE.md`, `GEMINI.md`, etc.) — these belong to the user (see §11.5)
 
