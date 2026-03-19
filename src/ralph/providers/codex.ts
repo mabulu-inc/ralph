@@ -6,7 +6,6 @@ export const codexProvider: AgentProvider = {
   supportsMaxTurns: false,
   supportsSystemPrompt: false,
   systemPromptFlag: '',
-  instructionsFile: 'AGENTS.md',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {
     const args = ['exec', ...options.outputFormat];

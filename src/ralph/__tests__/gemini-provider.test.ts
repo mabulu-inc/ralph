@@ -14,10 +14,6 @@ describe('geminiProvider', () => {
     expect(geminiProvider.supportsMaxTurns).toBe(false);
   });
 
-  it('has correct instructions file', () => {
-    expect(geminiProvider.instructionsFile).toBe('GEMINI.md');
-  });
-
   it('builds args for a basic prompt', () => {
     const args = geminiProvider.buildArgs('do something', {
       outputFormat: geminiProvider.outputFormat,

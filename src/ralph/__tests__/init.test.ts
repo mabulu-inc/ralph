@@ -59,13 +59,10 @@ describe('runInit', () => {
     expect(content).toContain('TypeScript');
   });
 
-  it('creates .claude/CLAUDE.md', async () => {
+  it('does NOT create .claude/CLAUDE.md', async () => {
     await runInit(tmpDir, defaultAnswers);
     const filePath = path.join(tmpDir, '.claude', 'CLAUDE.md');
-    expect(fs.existsSync(filePath)).toBe(true);
-    const content = fs.readFileSync(filePath, 'utf-8');
-    expect(content).toContain('# test-app');
-    expect(content).toContain('Build test-app');
+    expect(fs.existsSync(filePath)).toBe(false);
   });
 
   it('creates docs/prompts/rules.md', async () => {
@@ -92,9 +89,14 @@ describe('runInit', () => {
     const result = await runInit(tmpDir, defaultAnswers);
     expect(result.created).toContain('docs/PRD.md');
     expect(result.created).toContain('docs/tasks/T-000.md');
-    expect(result.created).toContain('.claude/CLAUDE.md');
     expect(result.created).toContain('docs/prompts/rules.md');
-    // Should NOT contain removed files
+    // Should NOT contain agent instructions files
+    expect(result.created).not.toContain('.claude/CLAUDE.md');
+    expect(result.created).not.toContain('GEMINI.md');
+    expect(result.created).not.toContain('AGENTS.md');
+    expect(result.created).not.toContain('.continue/config.yaml');
+    expect(result.created).not.toContain('.cursor/rules/ralph.md');
+    // Should NOT contain other removed files
     expect(result.created).not.toContain('docs/RALPH-METHODOLOGY.md');
     expect(result.created).not.toContain('docs/prompts/boot.md');
     expect(result.created).not.toContain('docs/prompts/system.md');
@@ -175,7 +177,6 @@ describe('runInit', () => {
     await runInit(tmpDir, defaultAnswers);
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'tasks'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'prompts'))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, '.claude'))).toBe(true);
   });
 
   it('adds ralph scripts to package.json for Node.js projects', async () => {
@@ -203,7 +204,7 @@ describe('runInit', () => {
   });
 });
 
-describe('runInit with gemini agent', () => {
+describe('runInit does not generate agent instructions files', () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -214,139 +215,45 @@ describe('runInit with gemini agent', () => {
     cleanup(tmpDir);
   });
 
-  it('creates GEMINI.md when agent is gemini', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'gemini' };
-    const result = await runInit(tmpDir, answers);
-    const filePath = path.join(tmpDir, 'GEMINI.md');
-    expect(fs.existsSync(filePath)).toBe(true);
-    expect(result.created).toContain('GEMINI.md');
+  it('does not create .claude/CLAUDE.md for any agent', async () => {
+    for (const agent of ['claude', 'gemini', 'codex', 'continue', 'cursor']) {
+      const dir = makeTmpDir();
+      const answers: InitAnswers = { ...defaultAnswers, agent };
+      await runInit(dir, answers);
+      expect(fs.existsSync(path.join(dir, '.claude', 'CLAUDE.md'))).toBe(false);
+      cleanup(dir);
+    }
   });
 
-  it('does not create .claude/CLAUDE.md when agent is gemini', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'gemini' };
-    await runInit(tmpDir, answers);
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(false);
-  });
-
-  it('creates .claude/CLAUDE.md by default (no agent specified)', async () => {
-    await runInit(tmpDir, defaultAnswers);
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(true);
-  });
-
-  it('creates .claude/CLAUDE.md when agent is claude', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'claude' };
-    await runInit(tmpDir, answers);
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(true);
-  });
-
-  it('GEMINI.md contains project name and goal', async () => {
+  it('does not create GEMINI.md when agent is gemini', async () => {
     const answers: InitAnswers = { ...defaultAnswers, agent: 'gemini' };
     await runInit(tmpDir, answers);
-    const content = fs.readFileSync(path.join(tmpDir, 'GEMINI.md'), 'utf-8');
-    expect(content).toContain('# test-app');
-    expect(content).toContain('Build test-app');
-  });
-});
-
-describe('runInit with codex agent', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTmpDir();
+    expect(fs.existsSync(path.join(tmpDir, 'GEMINI.md'))).toBe(false);
   });
 
-  afterEach(() => {
-    cleanup(tmpDir);
-  });
-
-  it('creates AGENTS.md when agent is codex', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'codex' };
-    const result = await runInit(tmpDir, answers);
-    const filePath = path.join(tmpDir, 'AGENTS.md');
-    expect(fs.existsSync(filePath)).toBe(true);
-    expect(result.created).toContain('AGENTS.md');
-  });
-
-  it('does not create .claude/CLAUDE.md when agent is codex', async () => {
+  it('does not create AGENTS.md when agent is codex', async () => {
     const answers: InitAnswers = { ...defaultAnswers, agent: 'codex' };
     await runInit(tmpDir, answers);
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'AGENTS.md'))).toBe(false);
   });
 
-  it('AGENTS.md contains project name and goal', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'codex' };
-    await runInit(tmpDir, answers);
-    const content = fs.readFileSync(path.join(tmpDir, 'AGENTS.md'), 'utf-8');
-    expect(content).toContain('# test-app');
-    expect(content).toContain('Build test-app');
-  });
-});
-
-describe('runInit with continue agent', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTmpDir();
-  });
-
-  afterEach(() => {
-    cleanup(tmpDir);
-  });
-
-  it('creates .continue/config.yaml when agent is continue', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'continue' };
-    const result = await runInit(tmpDir, answers);
-    const filePath = path.join(tmpDir, '.continue', 'config.yaml');
-    expect(fs.existsSync(filePath)).toBe(true);
-    expect(result.created).toContain('.continue/config.yaml');
-  });
-
-  it('does not create .claude/CLAUDE.md when agent is continue', async () => {
+  it('does not create .continue/config.yaml when agent is continue', async () => {
     const answers: InitAnswers = { ...defaultAnswers, agent: 'continue' };
     await runInit(tmpDir, answers);
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.continue', 'config.yaml'))).toBe(false);
   });
 
-  it('config.yaml contains project name and goal', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'continue' };
-    await runInit(tmpDir, answers);
-    const content = fs.readFileSync(path.join(tmpDir, '.continue', 'config.yaml'), 'utf-8');
-    expect(content).toContain('test-app');
-    expect(content).toContain('RALPH-METHODOLOGY.md');
-  });
-});
-
-describe('runInit with cursor agent', () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = makeTmpDir();
-  });
-
-  afterEach(() => {
-    cleanup(tmpDir);
-  });
-
-  it('creates .cursor/rules/ralph.md when agent is cursor', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'cursor' };
-    const result = await runInit(tmpDir, answers);
-    const filePath = path.join(tmpDir, '.cursor', 'rules', 'ralph.md');
-    expect(fs.existsSync(filePath)).toBe(true);
-    expect(result.created).toContain('.cursor/rules/ralph.md');
-  });
-
-  it('does not create .claude/CLAUDE.md when agent is cursor', async () => {
+  it('does not create .cursor/rules/ralph.md when agent is cursor', async () => {
     const answers: InitAnswers = { ...defaultAnswers, agent: 'cursor' };
     await runInit(tmpDir, answers);
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.cursor', 'rules', 'ralph.md'))).toBe(false);
   });
 
-  it('ralph.md contains project name and goal', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, agent: 'cursor' };
+  it('still creates ralph.config.json with agent field', async () => {
+    const answers: InitAnswers = { ...defaultAnswers, agent: 'gemini' };
     await runInit(tmpDir, answers);
-    const content = fs.readFileSync(path.join(tmpDir, '.cursor', 'rules', 'ralph.md'), 'utf-8');
-    expect(content).toContain('# test-app');
-    expect(content).toContain('Build test-app');
+    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8'));
+    expect(config.agent).toBe('gemini');
   });
 });
 

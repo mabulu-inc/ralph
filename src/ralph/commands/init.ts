@@ -2,11 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
 
-import { generateClaudeMd, type InitConfig } from '../templates/claude-md.js';
-import { generateAgentsMd } from '../templates/agents-md.js';
-import { generateContinueYaml } from '../templates/continue-yaml.js';
-import { generateCursorRules } from '../templates/cursor-rules.js';
-import { generateGeminiMd } from '../templates/gemini-md.js';
+import type { InitConfig } from '../templates/claude-md.js';
 import { generatePrd } from '../templates/prd.js';
 import { generateTask000 } from '../templates/task-000.js';
 import { generateRules } from '../templates/rules-md.js';
@@ -198,30 +194,6 @@ export async function runInit(
   if (!promptsOnly) {
     await writeFile(rootDir, 'docs/PRD.md', generatePrd(config.projectName), onConflict, result);
     await writeFile(rootDir, 'docs/tasks/T-000.md', generateTask000(config), onConflict, result);
-    const agent = answers.agent ?? 'claude';
-    if (agent === 'gemini') {
-      await writeFile(rootDir, 'GEMINI.md', generateGeminiMd(config), onConflict, result);
-    } else if (agent === 'codex') {
-      await writeFile(rootDir, 'AGENTS.md', generateAgentsMd(config), onConflict, result);
-    } else if (agent === 'continue') {
-      await writeFile(
-        rootDir,
-        '.continue/config.yaml',
-        generateContinueYaml(config),
-        onConflict,
-        result,
-      );
-    } else if (agent === 'cursor') {
-      await writeFile(
-        rootDir,
-        '.cursor/rules/ralph.md',
-        generateCursorRules(config),
-        onConflict,
-        result,
-      );
-    } else {
-      await writeFile(rootDir, '.claude/CLAUDE.md', generateClaudeMd(config), onConflict, result);
-    }
   }
 
   await writeFile(rootDir, 'docs/prompts/rules.md', generateRules(config), onConflict, result);

@@ -6,7 +6,6 @@ export const continueProvider: AgentProvider = {
   supportsMaxTurns: true,
   supportsSystemPrompt: false,
   systemPromptFlag: '',
-  instructionsFile: '~/.continue/config.yaml',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {
     const args = ['-p', ...options.outputFormat];

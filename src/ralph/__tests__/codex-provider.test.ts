@@ -14,10 +14,6 @@ describe('codexProvider', () => {
     expect(codexProvider.supportsMaxTurns).toBe(false);
   });
 
-  it('has correct instructions file', () => {
-    expect(codexProvider.instructionsFile).toBe('AGENTS.md');
-  });
-
   it('builds args with exec subcommand and prompt as positional argument', () => {
     const args = codexProvider.buildArgs('do something', {
       outputFormat: codexProvider.outputFormat,

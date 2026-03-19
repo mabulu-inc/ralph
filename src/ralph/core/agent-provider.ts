@@ -11,7 +11,6 @@ export interface AgentProvider {
   readonly supportsMaxTurns: boolean;
   readonly supportsSystemPrompt: boolean;
   readonly systemPromptFlag: string;
-  readonly instructionsFile: string;
   buildArgs(prompt: string, options: BuildArgsOptions): string[];
   parseOutput(raw: string): string;
 }

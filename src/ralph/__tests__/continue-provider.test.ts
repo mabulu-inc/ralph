@@ -14,10 +14,6 @@ describe('continueProvider', () => {
     expect(continueProvider.supportsMaxTurns).toBe(true);
   });
 
-  it('has correct instructions file', () => {
-    expect(continueProvider.instructionsFile).toBe('~/.continue/config.yaml');
-  });
-
   it('builds args for a basic prompt', () => {
     const args = continueProvider.buildArgs('do something', {
       outputFormat: continueProvider.outputFormat,

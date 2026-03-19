@@ -14,10 +14,6 @@ describe('cursorProvider', () => {
     expect(cursorProvider.supportsMaxTurns).toBe(false);
   });
 
-  it('has correct instructions file', () => {
-    expect(cursorProvider.instructionsFile).toBe('.cursor/rules/');
-  });
-
   it('builds args for a basic prompt', () => {
     const args = cursorProvider.buildArgs('do something', {
       outputFormat: cursorProvider.outputFormat,

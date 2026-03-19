@@ -19,7 +19,7 @@ describe('agent-provider registry', () => {
       supportsMaxTurns: false,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: 'TEST.md',
+
       buildArgs: () => [],
       parseOutput: (raw) => raw,
     };
@@ -39,7 +39,7 @@ describe('agent-provider registry', () => {
       supportsMaxTurns: false,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: 'TEST.md',
+
       buildArgs: () => [],
       parseOutput: (raw) => raw,
     };
@@ -57,7 +57,7 @@ describe('agent-provider registry', () => {
       supportsMaxTurns: false,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: 'A.md',
+
       buildArgs: () => [],
       parseOutput: (raw) => raw,
     };
@@ -78,7 +78,7 @@ describe('agent-provider registry', () => {
       supportsMaxTurns: false,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: 'T.md',
+
       buildArgs: () => [],
       parseOutput: (raw) => raw,
     };
@@ -98,7 +98,7 @@ describe('AgentProvider interface', () => {
       supportsMaxTurns: true,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: '.my-agent/config.md',
+
       buildArgs: (prompt, options) => {
         const args = ['-p', prompt, ...options.outputFormat];
         if (options.maxTurns !== undefined) {
@@ -137,7 +137,7 @@ describe('AgentProvider interface', () => {
       supportsMaxTurns: false,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: 'AGENT.md',
+
       buildArgs: () => [],
       parseOutput: (raw) => `parsed: ${raw}`,
     };

@@ -6,7 +6,6 @@ export const geminiProvider: AgentProvider = {
   supportsMaxTurns: false,
   supportsSystemPrompt: false,
   systemPromptFlag: '',
-  instructionsFile: 'GEMINI.md',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {
     const args = ['-p', ...options.outputFormat];

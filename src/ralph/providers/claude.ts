@@ -6,7 +6,6 @@ export const claudeProvider: AgentProvider = {
   supportsMaxTurns: true,
   supportsSystemPrompt: true,
   systemPromptFlag: '--system-prompt',
-  instructionsFile: '.claude/CLAUDE.md',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {
     const args = [

@@ -14,10 +14,6 @@ describe('claudeProvider', () => {
     expect(claudeProvider.supportsMaxTurns).toBe(true);
   });
 
-  it('has correct instructions file', () => {
-    expect(claudeProvider.instructionsFile).toBe('.claude/CLAUDE.md');
-  });
-
   it('builds args for a basic prompt', () => {
     const args = claudeProvider.buildArgs('do something', {
       outputFormat: claudeProvider.outputFormat,

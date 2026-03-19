@@ -396,7 +396,7 @@ describe('LoopOrchestrator', () => {
       supportsMaxTurns: false,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: 'GEMINI.md',
+
       buildArgs: (prompt, options) => ['-p', prompt, ...options.outputFormat],
       parseOutput: (raw) => raw,
     };
@@ -425,7 +425,7 @@ describe('LoopOrchestrator', () => {
       supportsMaxTurns: false,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: 'AGENTS.md',
+
       buildArgs: (prompt, options) => {
         const args = ['exec', ...options.outputFormat];
         if (options.maxTurns !== undefined) {
@@ -545,7 +545,7 @@ describe('LoopOrchestrator', () => {
       supportsMaxTurns: false,
       supportsSystemPrompt: false,
       systemPromptFlag: '',
-      instructionsFile: 'GEMINI.md',
+
       buildArgs: (prompt, options) => ['-p', prompt, ...options.outputFormat],
       parseOutput: (raw) => raw,
     };

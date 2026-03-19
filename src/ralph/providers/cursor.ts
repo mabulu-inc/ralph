@@ -6,7 +6,6 @@ export const cursorProvider: AgentProvider = {
   supportsMaxTurns: false,
   supportsSystemPrompt: false,
   systemPromptFlag: '',
-  instructionsFile: '.cursor/rules/',
 
   buildArgs(prompt: string, options: BuildArgsOptions): string[] {
     const args = ['-p', ...options.outputFormat];

@@ -51,14 +51,19 @@ describe('integration: ralph init creates expected file structure', () => {
   it('creates all scaffold files in a fresh directory', async () => {
     const result = await runInit(tmpDir, defaultAnswers);
 
-    expect(result.created).toHaveLength(5);
+    expect(result.created).toHaveLength(4);
     expect(result.skipped).toHaveLength(0);
 
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'PRD.md'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'tasks', 'T-000.md'))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'prompts', 'rules.md'))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'ralph.config.json'))).toBe(true);
+    // Agent instructions files are no longer generated
+    expect(fs.existsSync(path.join(tmpDir, '.claude', 'CLAUDE.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'GEMINI.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, 'AGENTS.md'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.continue', 'config.yaml'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, '.cursor', 'rules', 'ralph.md'))).toBe(false);
     // These are no longer generated — built-in templates are used at runtime
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'RALPH-METHODOLOGY.md'))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, 'docs', 'prompts', 'boot.md'))).toBe(false);
@@ -71,9 +76,6 @@ describe('integration: ralph init creates expected file structure', () => {
 
     const prd = fs.readFileSync(path.join(tmpDir, 'docs', 'PRD.md'), 'utf-8');
     expect(prd).toContain('integration-test-app');
-
-    const claudeMd = fs.readFileSync(path.join(tmpDir, '.claude', 'CLAUDE.md'), 'utf-8');
-    expect(claudeMd).toContain('Build integration-test-app');
 
     const task = fs.readFileSync(path.join(tmpDir, 'docs', 'tasks', 'T-000.md'), 'utf-8');
     expect(task).toContain('T-000');
