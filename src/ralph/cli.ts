@@ -9,6 +9,7 @@ const COMMANDS = [
   'update',
   'retry',
   'show',
+  'task',
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -55,6 +56,7 @@ export function formatHelp(unknown?: string): string {
   lines.push('  update      (deprecated) Built-in templates are now automatic');
   lines.push('  retry       Retry BLOCKED tasks from scratch');
   lines.push('  show        Display effective prompt content');
+  lines.push('  task        Scaffold a new task file');
 
   return lines.join('\n');
 }
@@ -99,6 +101,11 @@ const COMMAND_HELP: Record<Command, { description: string; usage: string }> = {
   show: {
     description: 'Display effective prompt content',
     usage: 'ralph show <subcommand> [--json] [--built-in-only]',
+  },
+  task: {
+    description: 'Scaffold a new task file',
+    usage:
+      'ralph task "Title" [--depends <ids>] [--complexity <tier>] [--milestone <name>] [--prd-ref <refs>] [--touches <paths>] [--roles <names>] [--dry-run]',
   },
 };
 
