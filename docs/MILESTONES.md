@@ -1,5 +1,7 @@
 # Milestones
 
+> **Auto-generated** by `ralph milestones` — do not edit manually.
+
 ## 1 — Infrastructure ($0.82)
 
 - [x] T-000: Project infrastructure and CLI skeleton — $0.82
@@ -62,6 +64,7 @@
 - [x] T-068: ralph retry command to re-run tasks from scratch — $0.55
 - [x] T-069: Smarter dependency parsing and diagnostic "no eligible task" messages — $0.60
 - [x] T-070: Improve monitor labels and add progress bar to "This run" — $0.41
+- [ ] T-074: Loop exit visibility, dynamic task detection, and iteration tracking
 
 ## 9 — Agent Abstraction ($6.23)
 
@@ -122,4 +125,8 @@
 
 - [x] T-073: Extract full task body for boot prompt — $0.59
 
-**Grand Total: $59.76**
+## 14 — Agent Roles ($0.61)
+
+- [x] T-075: Integrate agent roles into iteration prompt and logging — $0.61
+
+**Grand Total: $60.37**
