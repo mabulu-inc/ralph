@@ -27,7 +27,11 @@ describe('defaultBootPromptTemplate', () => {
   it('contains optional config placeholders', () => {
     const template = defaultBootPromptTemplate();
     expect(template).toContain('{{config.fileNaming}}');
-    expect(template).toContain('{{config.database}}');
+  });
+
+  it('does not contain database placeholder', () => {
+    const template = defaultBootPromptTemplate();
+    expect(template).not.toContain('{{config.database}}');
   });
 
   it('contains {{project.rules}} placeholder', () => {

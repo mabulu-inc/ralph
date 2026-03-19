@@ -9,7 +9,6 @@ export interface RalphConfigJson {
   agent: string;
   model?: string;
   fileNaming?: string;
-  database?: string;
   maxRetries?: number;
   maxCostPerTask?: number;
   maxLoopBudget?: number;
@@ -38,10 +37,6 @@ export function generateRalphConfigJson(
 
   if (config.fileNaming) {
     obj.fileNaming = config.fileNaming;
-  }
-
-  if (config.database) {
-    obj.database = config.database;
   }
 
   if (maxRetries !== undefined && maxRetries !== 3) {

@@ -20,7 +20,6 @@ const defaultAnswers: InitAnswers = {
   testingFramework: 'Vitest',
   qualityCheck: 'pnpm check',
   testCommand: 'pnpm test',
-  database: 'none',
 };
 
 describe('generatePromptsReadme', () => {
@@ -45,7 +44,6 @@ describe('generatePromptsReadme', () => {
       '{{config.qualityCheck}}',
       '{{config.testCommand}}',
       '{{config.fileNaming}}',
-      '{{config.database}}',
       '{{project.rules}}',
       '{{codebaseIndex}}',
       '{{retryContext}}',

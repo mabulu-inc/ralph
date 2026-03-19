@@ -37,7 +37,6 @@ The following variables are available in \`boot.md\`. Ralph replaces them before
 | \`{{config.qualityCheck}}\` | Quality check command (e.g., \`pnpm check\`) |
 | \`{{config.testCommand}}\` | Test command (e.g., \`pnpm test\`) |
 | \`{{config.fileNaming}}\` | File naming convention (e.g., \`kebab-case\`), empty if unset |
-| \`{{config.database}}\` | Database type (e.g., \`PostgreSQL\`), empty if unset |
 
 ### Injected Variables
 

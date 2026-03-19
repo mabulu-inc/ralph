@@ -6,7 +6,6 @@ export interface InitConfig {
   qualityCheck: string;
   testCommand: string;
   fileNaming?: string;
-  database?: string;
 }
 
 export function generateClaudeMd(config: InitConfig): string {

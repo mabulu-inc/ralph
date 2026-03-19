@@ -22,7 +22,6 @@ const defaultAnswers: InitAnswers = {
   testingFramework: 'Vitest',
   qualityCheck: 'pnpm check',
   testCommand: 'pnpm test',
-  database: 'none',
 };
 
 describe('runInit', () => {
@@ -166,11 +165,10 @@ describe('runInit', () => {
     expect(content).toBe('# Existing PRD\n');
   });
 
-  it('passes database config to task template when not "none"', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, database: 'PostgreSQL via Docker' };
-    await runInit(tmpDir, answers);
+  it('does not include database setup in task template', async () => {
+    await runInit(tmpDir, defaultAnswers);
     const task = fs.readFileSync(path.join(tmpDir, 'docs', 'tasks', 'T-000.md'), 'utf-8');
-    expect(task).toContain('PostgreSQL');
+    expect(task).not.toContain('Docker Compose');
   });
 
   it('creates necessary parent directories', async () => {
@@ -312,14 +310,7 @@ describe('runInit creates ralph.config.json', () => {
     expect(config.fileNaming).toBeUndefined();
   });
 
-  it('includes database when not "none"', async () => {
-    const answers: InitAnswers = { ...defaultAnswers, database: 'PostgreSQL' };
-    await runInit(tmpDir, answers);
-    const config = JSON.parse(fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8'));
-    expect(config.database).toBe('PostgreSQL');
-  });
-
-  it('omits database when "none"', async () => {
+  it('does not include database field in ralph.config.json', async () => {
     await runInit(tmpDir, defaultAnswers);
     const config = JSON.parse(fs.readFileSync(path.join(tmpDir, 'ralph.config.json'), 'utf-8'));
     expect(config.database).toBeUndefined();
@@ -409,7 +400,6 @@ describe('loadExistingDefaults', () => {
       agent: 'gemini',
       model: 'gemini-2.5-pro',
       fileNaming: 'snake_case',
-      database: 'PostgreSQL',
     };
     fs.writeFileSync(path.join(tmpDir, 'ralph.config.json'), JSON.stringify(config));
 
@@ -422,7 +412,6 @@ describe('loadExistingDefaults', () => {
     expect(defaults.agent).toBe('gemini');
     expect(defaults.model).toBe('gemini-2.5-pro');
     expect(defaults.fileNaming).toBe('snake_case');
-    expect(defaults.database).toBe('PostgreSQL');
   });
 
   it('falls back to package.json name for projectName', async () => {
@@ -508,8 +497,8 @@ describe('prompt helper', () => {
       cb('');
     }) as typeof rl.question;
 
-    await prompt(rl, 'Database', 'none');
-    expect(questions[0]).toBe('Database [none]: ');
+    await prompt(rl, 'Language', 'TypeScript');
+    expect(questions[0]).toBe('Language [TypeScript]: ');
   });
 
   it('formats question with options list', async () => {
@@ -520,8 +509,14 @@ describe('prompt helper', () => {
       cb('');
     }) as typeof rl.question;
 
-    await prompt(rl, 'Database', 'none', ['PostgreSQL', 'MySQL', 'SQLite', 'none']);
-    expect(questions[0]).toBe('Database (PostgreSQL, MySQL, SQLite, none) [none]: ');
+    await prompt(rl, 'File naming convention', 'kebab-case', [
+      'kebab-case',
+      'snake_case',
+      'camelCase',
+    ]);
+    expect(questions[0]).toBe(
+      'File naming convention (kebab-case, snake_case, camelCase) [kebab-case]: ',
+    );
   });
 
   it('shows options and default separately', async () => {
@@ -544,14 +539,14 @@ describe('prompt helper', () => {
 
   it('returns default when user presses enter', async () => {
     const rl = createMockRl('');
-    const result = await prompt(rl, 'Database', 'none');
-    expect(result).toBe('none');
+    const result = await prompt(rl, 'Language', 'TypeScript');
+    expect(result).toBe('TypeScript');
   });
 
   it('returns user input when provided', async () => {
-    const rl = createMockRl('PostgreSQL');
-    const result = await prompt(rl, 'Database', 'none');
-    expect(result).toBe('PostgreSQL');
+    const rl = createMockRl('Python');
+    const result = await prompt(rl, 'Language', 'TypeScript');
+    expect(result).toBe('Python');
   });
 
   it('shows no default suffix when no default provided', async () => {

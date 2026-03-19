@@ -11,7 +11,6 @@ PROJECT CONFIG:
 - quality check: {{config.qualityCheck}}
 - Test command: {{config.testCommand}}
 - File naming: {{config.fileNaming}}
-- Database: {{config.database}}
 
 {{project.rules}}
 
@@ -24,7 +23,7 @@ CODEBASE INDEX:
 
 TASK CONTEXT FOR ROLES:
 - PRD sections referenced: {{task.prdReference}}
-- Database/persistence involved: {{config.database}} (if empty, DBA role should skip — no data models or persistence changes)
+- Database/persistence involved: Review the task description above for data models, schema, or persistence changes. If none are present, DBA role should skip.
 - User-facing surface: Review the task description above for CLI output, error messages, or interactive prompts. If none are present, UX/UI Designer should skip — no user-facing surface.
 
 {{retryContext}}`;

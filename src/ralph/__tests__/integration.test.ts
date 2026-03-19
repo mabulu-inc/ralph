@@ -34,7 +34,6 @@ const defaultAnswers: InitAnswers = {
   testingFramework: 'Vitest',
   qualityCheck: 'pnpm check',
   testCommand: 'pnpm test',
-  database: 'none',
 };
 
 describe('integration: ralph init creates expected file structure', () => {

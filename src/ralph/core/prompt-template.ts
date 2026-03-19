@@ -39,7 +39,7 @@ export function interpolateTemplate(
     'config.qualityCheck': config.qualityCheck,
     'config.testCommand': config.testCommand,
     'config.fileNaming': config.fileNaming ?? '',
-    'config.database': config.database ?? '',
+    'config.database': '',
     'project.rules': projectRules,
     codebaseIndex,
     retryContext,

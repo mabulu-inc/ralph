@@ -15,7 +15,6 @@ export interface InitAnswers {
   testingFramework: string;
   qualityCheck: string;
   testCommand: string;
-  database: string;
   fileNaming?: string;
   agent?: string;
   model?: string;
@@ -54,10 +53,6 @@ function buildTemplateConfig(answers: InitAnswers): InitConfig {
 
   if (answers.fileNaming) {
     config.fileNaming = answers.fileNaming;
-  }
-
-  if (answers.database && answers.database !== 'none') {
-    config.database = answers.database;
   }
 
   return config;
@@ -156,7 +151,6 @@ export async function loadExistingDefaults(rootDir: string): Promise<Partial<Ini
       'agent',
       'model',
       'fileNaming',
-      'database',
     ];
 
     for (const field of stringFields) {
@@ -280,12 +274,6 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
       'Test command',
       defaults.testCommand ?? `${packageManager} test`,
     );
-    const database = await prompt(rl, 'Database', defaults.database ?? 'none', [
-      'PostgreSQL',
-      'MySQL',
-      'SQLite',
-      'none',
-    ]);
     const agent = await prompt(
       rl,
       'AI agent (claude, gemini, codex, continue, cursor)',
@@ -319,7 +307,6 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
       testingFramework,
       qualityCheck,
       testCommand,
-      database,
       agent: agent || 'claude',
       model: model || undefined,
       maxRetries,

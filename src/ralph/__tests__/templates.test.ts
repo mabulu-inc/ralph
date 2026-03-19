@@ -19,7 +19,6 @@ interface TemplateConfig {
   qualityCheck: string;
   testCommand: string;
   fileNaming?: string;
-  database?: string;
 }
 
 const tsConfig: TemplateConfig = {
@@ -39,7 +38,6 @@ const pyConfig: TemplateConfig = {
   testingFramework: 'pytest',
   qualityCheck: 'make check',
   testCommand: 'pytest',
-  database: 'PostgreSQL via Docker',
 };
 
 describe('generateClaudeMd', () => {
@@ -159,14 +157,10 @@ describe('generateRules', () => {
     expect(result).not.toContain('File naming');
   });
 
-  it('includes no-database rule when database is absent', () => {
+  it('includes database test rigging hint', () => {
     const result = generateRules(tsConfig);
-    expect(result).toContain('No database');
-  });
-
-  it('omits no-database rule when database is set', () => {
-    const result = generateRules({ ...tsConfig, database: 'PostgreSQL' });
-    expect(result).not.toContain('No database');
+    expect(result).toContain('database');
+    expect(result).toContain('test rigging');
   });
 
   it('includes node_modules warning for TypeScript', () => {
@@ -245,10 +239,14 @@ describe('defaultBootPromptTemplate', () => {
     expect(template).toContain('TASK CONTEXT FOR ROLES');
   });
 
-  it('signals whether task involves data models/persistence for DBA role', () => {
+  it('does not contain database config variable', () => {
     const template = defaultBootPromptTemplate();
-    expect(template.toLowerCase()).toContain('database');
-    expect(template.toLowerCase()).toContain('persistence');
+    expect(template).not.toContain('{{config.database}}');
+  });
+
+  it('does not include Database in PROJECT CONFIG section', () => {
+    const template = defaultBootPromptTemplate();
+    expect(template).not.toContain('- Database:');
   });
 
   it('signals whether task has user-facing surface for UX role', () => {
@@ -299,15 +297,10 @@ describe('generateTask000', () => {
     expect(result).toContain('pnpm check');
   });
 
-  it('includes database setup for projects with database', () => {
+  it('does not include database setup sections', () => {
     const result = generateTask000(pyConfig);
-    expect(result).toContain('PostgreSQL');
-    expect(result).toContain('Docker');
-  });
-
-  it('omits database setup for projects without database', () => {
-    const result = generateTask000(tsConfig);
     expect(result).not.toContain('Docker Compose');
+    expect(result).not.toContain('Database');
   });
 
   it('produces section', () => {

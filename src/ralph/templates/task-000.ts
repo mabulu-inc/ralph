@@ -36,16 +36,6 @@ export function generateTask000(config: InitConfig): string {
     `- Create \`${config.qualityCheck}\` script that runs: lint → format → typecheck → build → test:coverage`,
   );
 
-  if (config.database) {
-    lines.push(
-      '',
-      '**Database:**',
-      '',
-      `- Set up Docker Compose for ${config.database}`,
-      '- Configure connection and health check',
-    );
-  }
-
   lines.push(
     '',
     '## Produces',
@@ -57,10 +47,6 @@ export function generateTask000(config: InitConfig): string {
 
   if (isNode) {
     lines.push('- ESLint + Prettier configuration', '- husky + lint-staged setup');
-  }
-
-  if (config.database) {
-    lines.push('- Docker Compose configuration');
   }
 
   lines.push('- A passing `' + config.qualityCheck + '` run', '');

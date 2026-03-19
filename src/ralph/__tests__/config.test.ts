@@ -78,7 +78,6 @@ describe('parseConfig', () => {
       testingFramework: 'Vitest',
       qualityCheck: 'pnpm check',
       testCommand: 'pnpm test',
-      database: 'PostgreSQL via Docker on port 5433',
       agent: undefined,
       model: undefined,
       maxRetries: 3,
@@ -96,7 +95,6 @@ describe('parseConfig', () => {
       testingFramework: 'pytest',
       qualityCheck: 'make check',
       testCommand: 'pytest',
-      database: undefined,
       agent: undefined,
       model: undefined,
       maxRetries: 3,
@@ -114,7 +112,6 @@ describe('parseConfig', () => {
   it('returns undefined optional fields when not present', () => {
     const config = parseConfig(MINIMAL_CONFIG);
     expect(config.fileNaming).toBeUndefined();
-    expect(config.database).toBeUndefined();
   });
 
   it('throws when quality check is missing', () => {
@@ -280,16 +277,39 @@ describe('readConfig', () => {
       agent: 'claude',
       model: 'claude-sonnet-4-5-20250514',
       fileNaming: 'kebab-case',
-      database: 'PostgreSQL',
     };
     await writeFile(join(dir, 'ralph.config.json'), JSON.stringify(configData));
 
     try {
       const config = await readConfig(dir);
       expect(config.fileNaming).toBe('kebab-case');
-      expect(config.database).toBe('PostgreSQL');
       expect(config.agent).toBe('claude');
       expect(config.model).toBe('claude-sonnet-4-5-20250514');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores unknown fields like database in ralph.config.json (backward compat)', async () => {
+    const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+
+    const dir = await mkdtemp(join(tmpdir(), 'ralph-config-'));
+    const configData = {
+      language: 'TypeScript',
+      packageManager: 'pnpm',
+      testingFramework: 'Vitest',
+      qualityCheck: 'pnpm check',
+      testCommand: 'pnpm test',
+      database: 'PostgreSQL',
+    };
+    await writeFile(join(dir, 'ralph.config.json'), JSON.stringify(configData));
+
+    try {
+      const config = await readConfig(dir);
+      expect(config.language).toBe('TypeScript');
+      expect((config as Record<string, unknown>)['database']).toBeUndefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

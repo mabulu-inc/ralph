@@ -40,7 +40,6 @@ const mockConfig: ProjectConfig = {
   testingFramework: 'Vitest',
   qualityCheck: 'pnpm check',
   testCommand: 'pnpm test',
-  database: undefined,
   agent: undefined,
   model: undefined,
 };
@@ -89,14 +88,7 @@ describe('interpolateTemplate', () => {
     expect(result).toBe('Naming: ');
   });
 
-  it('replaces config.database with value when set', () => {
-    const configWithDb = { ...mockConfig, database: 'PostgreSQL' };
-    const template = 'DB: {{config.database}}';
-    const result = interpolateTemplate(template, mockTask, configWithDb);
-    expect(result).toBe('DB: PostgreSQL');
-  });
-
-  it('replaces config.database with empty string when unset', () => {
+  it('resolves {{config.database}} to empty string (removed variable)', () => {
     const template = 'DB: {{config.database}}';
     const result = interpolateTemplate(template, mockTask, mockConfig);
     expect(result).toBe('DB: ');

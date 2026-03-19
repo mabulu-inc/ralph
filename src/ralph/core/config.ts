@@ -10,7 +10,6 @@ export interface ProjectConfig {
   testingFramework: string;
   qualityCheck: string;
   testCommand: string;
-  database: string | undefined;
   agent: string | undefined;
   model: string | undefined;
   maxRetries: number;
@@ -51,7 +50,6 @@ export function parseConfig(content: string): ProjectConfig {
     testingFramework: requireField(sectionTree, 'Testing framework', 'Testing framework'),
     qualityCheck: requireField(sectionTree, 'Quality check', 'Quality check'),
     testCommand: requireField(sectionTree, 'Test command', 'Test command'),
-    database: extractConfigField(sectionTree, 'Database'),
     agent: undefined,
     model: undefined,
     maxRetries: 3,
@@ -69,7 +67,6 @@ interface RalphConfigJsonData {
   agent?: string;
   model?: string;
   fileNaming?: string;
-  database?: string;
   maxRetries?: number;
   maxCostPerTask?: number;
   maxLoopBudget?: number;
@@ -100,7 +97,6 @@ function parseConfigJson(raw: string): ProjectConfig {
     testingFramework: typed.testingFramework,
     qualityCheck: typed.qualityCheck,
     testCommand: typed.testCommand,
-    database: typed.database ?? undefined,
     agent: typed.agent ?? undefined,
     model: typed.model ?? undefined,
     maxRetries: typeof typed.maxRetries === 'number' ? typed.maxRetries : 3,

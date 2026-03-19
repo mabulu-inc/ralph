@@ -23,11 +23,13 @@ export function generateRules(config: InitConfig): string {
     );
   }
 
-  if (!config.database) {
-    lines.push('- No database required');
-  }
-
-  lines.push('');
+  lines.push(
+    '',
+    '<!-- Tip: If your project uses a database, create an early task to set up',
+    '     test rigging (e.g., testcontainers, Docker Compose, in-memory SQLite)',
+    '     so all subsequent tasks can run integration tests automatically. -->',
+    '',
+  );
 
   return lines.join('\n');
 }
