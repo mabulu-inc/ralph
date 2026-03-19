@@ -1,7 +1,12 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertSafeTaskId } from '../core/sanitize.js';
-import { runCoaching, formatCoachingOutput, formatCoachingJson } from '../core/coach.js';
+import {
+  runCoaching,
+  formatCoachingOutput,
+  formatCoachingJson,
+  type CoachingOptions,
+} from '../core/coach.js';
 import {
   parseLogContent,
   extractPhaseTimeline,
@@ -334,13 +339,34 @@ export async function formatReviewJson(
   return JSON.stringify(output, null, 2);
 }
 
-export async function run(args: string[], cwd?: string): Promise<void> {
+export async function run(
+  args: string[],
+  cwd?: string,
+  coachOpts?: CoachingOptions,
+): Promise<void> {
   const projectDir = cwd ?? process.cwd();
   const isJson = args.includes('--json') || args.includes('-j');
   const isCoach = args.includes('--coach') || args.includes('-c');
 
+  // Extract task ID (non-flag argument)
+  const taskId = args.find((a) => !a.startsWith('-'));
+
   if (isCoach) {
-    const result = await runCoaching(projectDir);
+    if (!coachOpts) {
+      console.error(
+        'Coaching requires an agent configuration. Pass --agent or configure in ralph.config.json.',
+      );
+      return;
+    }
+    if (taskId) {
+      try {
+        assertSafeTaskId(taskId);
+      } catch {
+        console.error(`Invalid task ID: ${taskId}`);
+        return;
+      }
+    }
+    const result = await runCoaching(taskId, projectDir, coachOpts);
     if (isJson) {
       console.log(formatCoachingJson(result));
     } else {
@@ -349,7 +375,6 @@ export async function run(args: string[], cwd?: string): Promise<void> {
     return;
   }
 
-  const taskId = args.find((a) => !a.startsWith('-'));
   if (!taskId) {
     console.error(
       'Usage: ralph review <task ID> [--diagnose] [--json] [--verbose] | ralph review --coach [--json]',
