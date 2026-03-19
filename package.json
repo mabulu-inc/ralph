@@ -28,7 +28,10 @@
     "cost": "node dist/ralph/bin.js cost",
     "monitor": "node dist/ralph/bin.js monitor -w",
     "monitor:once": "node dist/ralph/bin.js monitor",
-    "prepare": "husky"
+    "prepare": "husky",
+    "release:patch": "pnpm version patch && git push && git push --tags && gh release create v$(node -p \"require('./package.json').version\") --generate-notes",
+    "release:minor": "pnpm version minor && git push && git push --tags && gh release create v$(node -p \"require('./package.json').version\") --generate-notes",
+    "release:major": "pnpm version major && git push && git push --tags && gh release create v$(node -p \"require('./package.json').version\") --generate-notes"
   },
   "lint-staged": {
     "*.{ts,js}": [
