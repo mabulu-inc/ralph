@@ -320,6 +320,115 @@ Just the description.
     expect(body).not.toMatch(/^## Description/);
     expect(body).toContain('Just the description.');
   });
+
+  it('includes custom sections that are not in the exclusion list', () => {
+    const tree = parseMarkdown(`# T-008: Custom sections
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+The description.
+
+## Security Considerations
+
+Must validate all inputs.
+
+## Migration Plan
+
+Run migration script first.
+
+## AC
+
+- Tests pass
+`);
+    const body = extractTaskBody(tree);
+    expect(body).toContain('The description.');
+    expect(body).toContain('## Security Considerations');
+    expect(body).toContain('Must validate all inputs.');
+    expect(body).toContain('## Migration Plan');
+    expect(body).toContain('Run migration script first.');
+    expect(body).toContain('## AC');
+    expect(body).toContain('Tests pass');
+  });
+
+  it('excludes all four excluded sections: Hints, Produces, Completion Notes, Blocked', () => {
+    const tree = parseMarkdown(`# T-009: All exclusions
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+The description.
+
+## Custom Section
+
+Custom content.
+
+## Hints
+
+Hint text.
+
+## Produces
+
+- \`src/f.ts\`
+
+## Completion Notes
+
+Notes text.
+
+## Blocked
+
+Block reason.
+`);
+    const body = extractTaskBody(tree);
+    expect(body).toContain('The description.');
+    expect(body).toContain('Custom content.');
+    expect(body).not.toContain('Hint text');
+    expect(body).not.toContain('src/f.ts');
+    expect(body).not.toContain('Notes text');
+    expect(body).not.toContain('Block reason');
+  });
+
+  it('preserves section order from the original document', () => {
+    const tree = parseMarkdown(`# T-010: Section order
+
+- **Status**: TODO
+- **Milestone**: 1 — Test
+- **Depends**: none
+- **PRD Reference**: §1
+
+## Description
+
+Desc text.
+
+## Implementation Notes
+
+Impl notes.
+
+## Changes
+
+Change list.
+
+## AC
+
+AC list.
+`);
+    const body = extractTaskBody(tree);
+    const descIdx = body.indexOf('Desc text.');
+    const implIdx = body.indexOf('## Implementation Notes');
+    const changesIdx = body.indexOf('## Changes');
+    const acIdx = body.indexOf('## AC');
+    expect(descIdx).toBeLessThan(implIdx);
+    expect(implIdx).toBeLessThan(changesIdx);
+    expect(changesIdx).toBeLessThan(acIdx);
+  });
 });
 
 describe('updateField', () => {

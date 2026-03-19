@@ -3,9 +3,18 @@ import { join } from 'node:path';
 import { defaultSystemPromptTemplate } from '../templates/system-prompt.js';
 import { defaultBootPromptTemplate } from '../templates/boot-prompt.js';
 import { generateMethodology } from '../templates/methodology.js';
-import { BUILT_IN_ROLES, parseRolesFile } from '../core/roles.js';
+import { BUILT_IN_ROLES, parseRolesFile, mergeRoles, filterRolesForTask } from '../core/roles.js';
+import { parseTaskFile } from '../core/tasks.js';
+import { EXCLUDED_SECTIONS } from '../core/markdown.js';
 
-const SUBCOMMANDS = ['system-prompt', 'boot-prompt', 'roles', 'methodology', 'rules'] as const;
+const SUBCOMMANDS = [
+  'system-prompt',
+  'boot-prompt',
+  'roles',
+  'methodology',
+  'rules',
+  'task',
+] as const;
 
 type Subcommand = (typeof SUBCOMMANDS)[number];
 
@@ -29,21 +38,28 @@ export interface ShowResult {
   extension?: string;
   roles?: RoleAnnotation[];
   rules?: string;
+  taskBody?: string;
+  hints?: string;
+  excludedSections?: string[];
 }
 
 export function parseShowArgs(args: string[]): {
   subcommand: Subcommand | 'help';
   json: boolean;
   builtInOnly: boolean;
+  taskId?: string;
 } {
   const flags = { json: false, builtInOnly: false };
   let subcommand: Subcommand | 'help' = 'help';
+  let taskId: string | undefined;
 
   for (const arg of args) {
     if (arg === '--json') {
       flags.json = true;
     } else if (arg === '--built-in-only') {
       flags.builtInOnly = true;
+    } else if (subcommand === 'task' && TASK_ID_RE.test(arg)) {
+      taskId = arg;
     } else if ((SUBCOMMANDS as readonly string[]).includes(arg)) {
       subcommand = arg as Subcommand;
     } else {
@@ -52,8 +68,14 @@ export function parseShowArgs(args: string[]): {
     }
   }
 
-  return { subcommand, ...flags };
+  if (subcommand === 'task' && !taskId) {
+    return { subcommand: 'help', ...flags };
+  }
+
+  return { subcommand, taskId, ...flags };
 }
+
+const TASK_ID_RE = /^T-\d+$/;
 
 export function formatShowHelp(): string {
   const lines: string[] = [];
@@ -67,6 +89,7 @@ export function formatShowHelp(): string {
   lines.push('  roles          Active roles with source annotations');
   lines.push('  methodology    Ralph Methodology reference');
   lines.push('  rules          Project-specific rules');
+  lines.push('  task T-NNN     Effective task body, hints, excluded sections, and roles');
   lines.push('');
   lines.push('Options:');
   lines.push('  --json           Output as JSON');
@@ -305,6 +328,93 @@ export async function showRules(projectDir: string, opts: ShowOptions): Promise<
   return { content: rulesContent, hasExtension: false };
 }
 
+export async function showTask(
+  projectDir: string,
+  taskId: string,
+  opts: ShowOptions,
+): Promise<ShowResult> {
+  const taskPath = join(projectDir, 'tasks', `${taskId}.md`);
+  const content = await readFile(taskPath, 'utf-8');
+  const task = parseTaskFile(`${taskId}.md`, content);
+
+  const rolesPath = join(projectDir, 'docs', 'prompts', 'roles.md');
+  let rolesContent = '';
+  try {
+    rolesContent = await readFile(rolesPath, 'utf-8');
+  } catch {
+    // no roles file
+  }
+
+  const customizations = parseRolesFile(rolesContent);
+  const merged = mergeRoles(BUILT_IN_ROLES, customizations);
+  const filtered = filterRolesForTask(merged, task.roles);
+
+  const annotations: RoleAnnotation[] = filtered.map((role) => {
+    const overrideNames = new Set(customizations.overrides.map((o) => o.name));
+    const additionNames = new Set(customizations.additions.map((a) => a.name));
+    let source: RoleAnnotation['source'] = 'built-in';
+    if (overrideNames.has(role.name)) source = 'overridden';
+    else if (additionNames.has(role.name)) source = 'added';
+    return { ...role, source };
+  });
+
+  const excludedSections = [...EXCLUDED_SECTIONS];
+
+  if (opts.json) {
+    return {
+      content: formatTaskText(task.description, task.hints, excludedSections, annotations),
+      hasExtension: false,
+      taskBody: task.description,
+      hints: task.hints,
+      excludedSections,
+      roles: annotations,
+    };
+  }
+
+  return {
+    content: formatTaskText(task.description, task.hints, excludedSections, annotations),
+    hasExtension: false,
+    taskBody: task.description,
+    hints: task.hints,
+    excludedSections,
+    roles: annotations,
+  };
+}
+
+function formatTaskText(
+  body: string,
+  hints: string,
+  excludedSections: string[],
+  roles: RoleAnnotation[],
+): string {
+  const lines: string[] = [];
+
+  lines.push('=== Task Body ({{task.description}}) ===');
+  lines.push('');
+  lines.push(body || '(empty)');
+  lines.push('');
+
+  lines.push('=== Hints ({{task.hints}}) ===');
+  lines.push('');
+  lines.push(hints || '(none)');
+  lines.push('');
+
+  lines.push('=== Excluded Sections ===');
+  lines.push('');
+  for (const section of excludedSections) {
+    lines.push(`  - ${section}`);
+  }
+  lines.push('');
+
+  lines.push('=== Active Roles ===');
+  lines.push('');
+  for (const role of roles) {
+    lines.push(`  ${role.name} [${role.source}]`);
+  }
+
+  return lines.join('\n');
+}
+
 export async function run(args: string[]): Promise<void> {
   const parsed = parseShowArgs(args);
 
@@ -333,6 +443,9 @@ export async function run(args: string[]): Promise<void> {
       break;
     case 'rules':
       result = await showRules(projectDir, opts);
+      break;
+    case 'task':
+      result = await showTask(projectDir, parsed.taskId!, opts);
       break;
   }
 

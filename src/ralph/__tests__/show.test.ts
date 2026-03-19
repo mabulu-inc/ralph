@@ -8,6 +8,7 @@ import {
   showRoles,
   showMethodology,
   showRules,
+  showTask,
   parseShowArgs,
   formatShowHelp,
   run,
@@ -321,6 +322,175 @@ describe('showRules', () => {
 
     const result = await showRules(tmpDir, { json: false, builtInOnly: true });
     expect(result.content).toContain('No built-in rules');
+  });
+});
+
+describe('parseShowArgs with task subcommand', () => {
+  it('parses task subcommand with task ID', () => {
+    const result = parseShowArgs(['task', 'T-081']);
+    expect(result.subcommand).toBe('task');
+    expect(result.taskId).toBe('T-081');
+    expect(result.json).toBe(false);
+  });
+
+  it('parses task subcommand with --json flag', () => {
+    const result = parseShowArgs(['task', 'T-001', '--json']);
+    expect(result.subcommand).toBe('task');
+    expect(result.taskId).toBe('T-001');
+    expect(result.json).toBe(true);
+  });
+
+  it('returns help when task subcommand has no task ID', () => {
+    const result = parseShowArgs(['task']);
+    expect(result.subcommand).toBe('help');
+  });
+});
+
+describe('showTask', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => {
+    cleanup(tmpDir);
+  });
+
+  const SAMPLE_TASK = `# T-050: Sample task
+
+- **Status**: TODO
+- **Milestone**: 3 — Features
+- **Depends**: T-001
+- **PRD Reference**: §5
+
+## Description
+
+This is the main description.
+
+## Security Considerations
+
+Validate all user inputs.
+
+## Changes
+
+- Modify file A
+- Modify file B
+
+## AC
+
+- All tests pass
+- No regressions
+
+## Hints
+
+Look at the existing parser for guidance.
+
+## Produces
+
+- \`src/sample.ts\`
+
+## Completion Notes
+
+Done with 10 tests.
+
+## Blocked
+
+Waiting for upstream fix.
+`;
+
+  it('returns the effective task body including custom sections', async () => {
+    const tasksDir = path.join(tmpDir, 'tasks');
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(tasksDir, 'T-050.md'), SAMPLE_TASK);
+
+    const result = await showTask(tmpDir, 'T-050', { json: false, builtInOnly: false });
+    expect(result.content).toContain('This is the main description.');
+    expect(result.content).toContain('Security Considerations');
+    expect(result.content).toContain('Validate all user inputs.');
+    expect(result.content).toContain('Modify file A');
+    expect(result.content).toContain('All tests pass');
+  });
+
+  it('shows hints separately from body', async () => {
+    const tasksDir = path.join(tmpDir, 'tasks');
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(tasksDir, 'T-050.md'), SAMPLE_TASK);
+
+    const result = await showTask(tmpDir, 'T-050', { json: false, builtInOnly: false });
+    expect(result.content).toContain('Look at the existing parser for guidance');
+    // Body portion should not contain hints
+    expect(result.taskBody).not.toContain('Look at the existing parser');
+    expect(result.hints).toBe('Look at the existing parser for guidance.');
+  });
+
+  it('lists excluded sections', async () => {
+    const tasksDir = path.join(tmpDir, 'tasks');
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(tasksDir, 'T-050.md'), SAMPLE_TASK);
+
+    const result = await showTask(tmpDir, 'T-050', { json: false, builtInOnly: false });
+    expect(result.excludedSections).toContain('Hints');
+    expect(result.excludedSections).toContain('Produces');
+    expect(result.excludedSections).toContain('Completion Notes');
+    expect(result.excludedSections).toContain('Blocked');
+  });
+
+  it('resolves active roles for the task', async () => {
+    const tasksDir = path.join(tmpDir, 'tasks');
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(tasksDir, 'T-050.md'), SAMPLE_TASK);
+
+    const result = await showTask(tmpDir, 'T-050', { json: false, builtInOnly: false });
+    expect(result.roles).toBeDefined();
+    expect(result.roles!.length).toBeGreaterThan(0);
+    expect(result.roles!.some((r) => r.name === 'Product Manager')).toBe(true);
+  });
+
+  it('returns structured JSON when json flag is set', async () => {
+    const tasksDir = path.join(tmpDir, 'tasks');
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(tasksDir, 'T-050.md'), SAMPLE_TASK);
+
+    const result = await showTask(tmpDir, 'T-050', { json: true, builtInOnly: false });
+    expect(result.taskBody).toBeDefined();
+    expect(result.hints).toBeDefined();
+    expect(result.excludedSections).toBeDefined();
+    expect(result.roles).toBeDefined();
+  });
+
+  it('respects Roles field in task file for filtering roles', async () => {
+    const taskWithRoles = `# T-051: Role-filtered task
+
+- **Status**: TODO
+- **Milestone**: 3 — Features
+- **Depends**: none
+- **PRD Reference**: §5
+- **Roles**: Product Manager, Security Engineer
+
+## Description
+
+A task with specific roles.
+`;
+    const tasksDir = path.join(tmpDir, 'tasks');
+    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.writeFileSync(path.join(tasksDir, 'T-051.md'), taskWithRoles);
+
+    const result = await showTask(tmpDir, 'T-051', { json: false, builtInOnly: false });
+    const roleNames = result.roles!.map((r) => r.name);
+    expect(roleNames).toContain('Product Manager');
+    expect(roleNames).toContain('Security Engineer');
+    // Frontend & Backend Engineers always included
+    expect(roleNames).toContain('Frontend & Backend Engineers');
+    // Other roles should be excluded
+    expect(roleNames).not.toContain('UX/UI Designer');
+  });
+});
+
+describe('formatShowHelp with task', () => {
+  it('lists the task subcommand', () => {
+    const help = formatShowHelp();
+    expect(help).toContain('task');
   });
 });
 

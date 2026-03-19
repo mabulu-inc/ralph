@@ -124,25 +124,32 @@ export function extractSectionFirstParagraph(tree: Root, headingText: string): s
   return '';
 }
 
-const ACTIONABLE_SECTIONS = ['Description', 'Changes', 'AC', 'Scope'];
+export const EXCLUDED_SECTIONS = new Set(['Hints', 'Produces', 'Completion Notes', 'Blocked']);
 
 export function extractTaskBody(tree: Root): string {
   const parts: string[] = [];
+  const children = tree.children;
 
-  for (const section of ACTIONABLE_SECTIONS) {
-    const nodes = findSection(tree, section);
-    if (nodes.length === 0) continue;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    if (child.type !== 'heading' || child.depth !== 2) continue;
 
-    const text = nodes
+    const heading = toString(child);
+    if (EXCLUDED_SECTIONS.has(heading)) continue;
+
+    const sectionNodes = findSection(tree, heading);
+    if (sectionNodes.length === 0) continue;
+
+    const text = sectionNodes
       .map((n) => toString(n))
       .join('\n\n')
       .trim();
     if (!text) continue;
 
-    if (section === 'Description') {
+    if (heading === 'Description') {
       parts.push(text);
     } else {
-      parts.push(`## ${section}\n\n${text}`);
+      parts.push(`## ${heading}\n\n${text}`);
     }
   }
 
