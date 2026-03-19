@@ -95,6 +95,56 @@ describe('review command', () => {
       const result = await formatReviewTimeline('T-999', logsDir);
       expect(result).toContain('No log files found');
     });
+
+    it('displays cost in USD when available', async () => {
+      const { formatReviewTimeline } = await import('../commands/review.js');
+      const logContent = [
+        makeAssistantText('[PHASE] Entering: Boot', '2026-03-19T10:00:00Z'),
+        makeAssistantText('[PHASE] Entering: Commit', '2026-03-19T10:20:00Z'),
+        makeResult({
+          subtype: 'success',
+          num_turns: 15,
+          stop_reason: 'end_turn',
+          cost_usd: 2.35,
+        }),
+      ].join('\n');
+      await writeFile(join(logsDir, 'T-042-1711036800000.jsonl'), logContent);
+
+      const result = await formatReviewTimeline('T-042', logsDir);
+      expect(result).toContain('$2.35');
+      expect(result).toContain('15 turns');
+    });
+
+    it('abbreviates long role commentary in non-verbose mode', async () => {
+      const { formatReviewTimeline } = await import('../commands/review.js');
+      const longCommentary = 'A'.repeat(100);
+      const logContent = [
+        makeAssistantText('[PHASE] Entering: Boot', '2026-03-19T10:00:00Z'),
+        makeAssistantText(`[ROLE: PM] ${longCommentary}`, '2026-03-19T10:01:00Z'),
+        makeAssistantText('[PHASE] Entering: Commit', '2026-03-19T10:20:00Z'),
+        makeResult({ subtype: 'success', num_turns: 10, stop_reason: 'end_turn' }),
+      ].join('\n');
+      await writeFile(join(logsDir, 'T-042-1711036800000.jsonl'), logContent);
+
+      const result = await formatReviewTimeline('T-042', logsDir, false);
+      expect(result).toContain('...');
+    });
+
+    it('shows full commentary in verbose mode', async () => {
+      const { formatReviewTimeline } = await import('../commands/review.js');
+      const longCommentary = 'A'.repeat(100);
+      const logContent = [
+        makeAssistantText('[PHASE] Entering: Boot', '2026-03-19T10:00:00Z'),
+        makeAssistantText(`[ROLE: PM] ${longCommentary}`, '2026-03-19T10:01:00Z'),
+        makeAssistantText('[PHASE] Entering: Commit', '2026-03-19T10:20:00Z'),
+        makeResult({ subtype: 'success', num_turns: 10, stop_reason: 'end_turn' }),
+      ].join('\n');
+      await writeFile(join(logsDir, 'T-042-1711036800000.jsonl'), logContent);
+
+      const result = await formatReviewTimeline('T-042', logsDir, true);
+      expect(result).toContain(longCommentary);
+      expect(result).not.toContain('...');
+    });
   });
 
   describe('formatDiagnosis', () => {
@@ -143,6 +193,20 @@ describe('review command', () => {
       expect(result).toContain('SDET');
     });
 
+    it('truncates long error messages', async () => {
+      const { formatDiagnosis } = await import('../commands/review.js');
+      const longError = 'Error: ' + 'x'.repeat(300);
+      const logContent = [
+        makeAssistantText('[PHASE] Entering: Verify', '2026-03-19T10:00:00Z'),
+        makeResult({ subtype: 'error', content: longError, num_turns: 20 }),
+      ].join('\n');
+      await writeFile(join(logsDir, 'T-042-1711036800000.jsonl'), logContent);
+
+      const result = await formatDiagnosis('T-042', logsDir);
+      expect(result).toContain('Last error:');
+      expect(result).toContain('...');
+    });
+
     it('handles task with no logs', async () => {
       const { formatDiagnosis } = await import('../commands/review.js');
       const result = await formatDiagnosis('T-999', logsDir);
@@ -179,6 +243,31 @@ describe('review command', () => {
       const parsed = JSON.parse(result);
       expect(parsed.diagnosis).toBeDefined();
       expect(parsed.diagnosis.classification).toBe('max_turns');
+    });
+
+    it('includes roles in JSON output', async () => {
+      const { formatReviewJson } = await import('../commands/review.js');
+      const logContent = [
+        makeAssistantText('[PHASE] Entering: Boot', '2026-03-19T10:00:00Z'),
+        makeAssistantText('[ROLE: Product Manager] Task aligns with PRD.', '2026-03-19T10:01:00Z'),
+        makeResult({ subtype: 'success', num_turns: 10, stop_reason: 'end_turn' }),
+      ].join('\n');
+      await writeFile(join(logsDir, 'T-042-1711036800000.jsonl'), logContent);
+
+      const result = await formatReviewJson('T-042', logsDir, false);
+      const parsed = JSON.parse(result);
+      expect(parsed.attempts[0].roles).toHaveLength(1);
+      expect(parsed.attempts[0].roles[0].role).toBe('Product Manager');
+      expect(parsed.attempts[0].roles[0].phase).toBe('Boot');
+      expect(parsed.attempts[0].roles[0].commentary).toContain('Task aligns');
+    });
+
+    it('returns empty attempts for no log files', async () => {
+      const { formatReviewJson } = await import('../commands/review.js');
+      const result = await formatReviewJson('T-999', logsDir, false);
+      const parsed = JSON.parse(result);
+      expect(parsed.taskId).toBe('T-999');
+      expect(parsed.attempts).toHaveLength(0);
     });
   });
 

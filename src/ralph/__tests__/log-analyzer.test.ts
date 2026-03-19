@@ -222,6 +222,16 @@ describe('extractFailureSignals', () => {
     const signals = extractFailureSignals(entries);
     expect(signals.maxTurnsExhausted).toBe(true);
   });
+
+  it('detects timeout stop reason', () => {
+    const content = makeResult({
+      subtype: 'error',
+      stop_reason: 'timeout',
+    });
+    const entries = parseLogContent(content);
+    const signals = extractFailureSignals(entries);
+    expect(signals.timeout).toBe(true);
+  });
 });
 
 describe('extractCostAndTurns', () => {
@@ -254,6 +264,19 @@ describe('extractCostAndTurns', () => {
 });
 
 describe('classifyFailure', () => {
+  it('classifies timeout failure', () => {
+    const signals: FailureSignals = {
+      blocked: null,
+      lastError: null,
+      maxTurnsExhausted: false,
+      timeout: true,
+      nonZeroExit: false,
+    };
+    const classification = classifyFailure(signals, []);
+    expect(classification.type).toBe('timeout');
+    expect(classification.detail).toContain('timed out');
+  });
+
   it('classifies max_turns failure', () => {
     const signals: FailureSignals = {
       blocked: null,
@@ -364,5 +387,25 @@ describe('generateRecommendations', () => {
     const recs = generateRecommendations(classification);
     expect(recs.length).toBeGreaterThan(0);
     expect(recs.some((r) => r.toLowerCase().includes('role'))).toBe(true);
+  });
+
+  it('generates recommendation for timeout', () => {
+    const classification: FailureClassification = {
+      type: 'timeout',
+      detail: 'Task execution timed out',
+    };
+    const recs = generateRecommendations(classification);
+    expect(recs.length).toBeGreaterThan(0);
+    expect(recs.some((r) => r.toLowerCase().includes('complexity'))).toBe(true);
+  });
+
+  it('generates recommendation for no_commit', () => {
+    const classification: FailureClassification = {
+      type: 'no_commit',
+      detail: 'No commit produced',
+    };
+    const recs = generateRecommendations(classification);
+    expect(recs.length).toBeGreaterThan(0);
+    expect(recs.some((r) => r.toLowerCase().includes('commit'))).toBe(true);
   });
 });
