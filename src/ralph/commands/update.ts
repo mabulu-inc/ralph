@@ -7,7 +7,7 @@ export async function runUpdate(_rootDir: string): Promise<UpdateResult> {
   return {
     deprecated: true,
     message:
-      'The update command is no longer needed. Ralph now uses built-in templates at runtime, so prompt updates are automatic when you upgrade ralph.',
+      "ralph update is no longer needed — ralph now reads prompts from built-in code. Run 'ralph migrate' to clean up legacy prompt files.",
   };
 }
 

@@ -11,6 +11,7 @@ const COMMANDS = [
   'review',
   'show',
   'task',
+  'migrate',
 ] as const;
 type Command = (typeof COMMANDS)[number];
 
@@ -59,6 +60,7 @@ export function formatHelp(unknown?: string): string {
   lines.push('  review      Analyze task execution and diagnose failures');
   lines.push('  show        Display effective prompt content');
   lines.push('  task        Scaffold a new task file');
+  lines.push('  migrate     Clean up legacy prompt files');
 
   return lines.join('\n');
 }
@@ -113,6 +115,10 @@ const COMMAND_HELP: Record<Command, { description: string; usage: string }> = {
     description: 'Scaffold a new task file',
     usage:
       'ralph task "Title" [--depends <ids>] [--complexity <tier>] [--milestone <name>] [--prd-ref <refs>] [--touches <paths>] [--roles <names>] [--dry-run]',
+  },
+  migrate: {
+    description: 'Clean up legacy prompt files from pre-built-in-first projects',
+    usage: 'ralph migrate [--dry-run] [--force]',
   },
 };
 
