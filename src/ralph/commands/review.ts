@@ -7,6 +7,10 @@ import {
   formatCoachingJson,
   type CoachingOptions,
 } from '../core/coach.js';
+import { readConfig } from '../core/config.js';
+import { ensureProvidersRegistered } from '../providers/index.js';
+import { getProvider } from '../core/agent-provider.js';
+import { spawnWithCapture, monitorProcess } from '../core/process.js';
 import {
   parseLogContent,
   extractPhaseTimeline,
@@ -339,6 +343,60 @@ export async function formatReviewJson(
   return JSON.stringify(output, null, 2);
 }
 
+function parseAgentFlag(args: string[]): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === '--agent' || args[i] === '-a') && i + 1 < args.length) {
+      return args[i + 1];
+    }
+  }
+  return undefined;
+}
+
+function buildSpawnAgent(
+  agentName: string,
+): (opts: { systemPrompt: string; userPrompt: string }) => Promise<string> {
+  ensureProvidersRegistered();
+  const provider = getProvider(agentName);
+  return async (opts) => {
+    const agentArgs = provider.buildArgs(opts.userPrompt, {
+      outputFormat: provider.outputFormat,
+      systemPrompt: opts.systemPrompt,
+    });
+    const child = spawnWithCapture(provider.binary, agentArgs, {});
+    let output = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    await monitorProcess(child, {});
+    return provider.parseOutput(output);
+  };
+}
+
+async function resolveCoachingOptions(
+  projectDir: string,
+  agentFlag: string | undefined,
+  coachOpts: CoachingOptions | undefined,
+): Promise<CoachingOptions | null> {
+  if (coachOpts) return coachOpts;
+
+  let agentName = agentFlag;
+  if (!agentName) {
+    try {
+      const config = await readConfig(projectDir);
+      agentName = config.agent;
+    } catch {
+      // Config not found or invalid — fall through to error
+    }
+  }
+
+  if (!agentName) return null;
+
+  return {
+    agent: agentName,
+    spawnAgent: buildSpawnAgent(agentName),
+  };
+}
+
 export async function run(
   args: string[],
   cwd?: string,
@@ -348,11 +406,18 @@ export async function run(
   const isJson = args.includes('--json') || args.includes('-j');
   const isCoach = args.includes('--coach') || args.includes('-c');
 
-  // Extract task ID (non-flag argument)
-  const taskId = args.find((a) => !a.startsWith('-'));
+  // Extract task ID (non-flag argument, skip values after --agent/-a)
+  const agentFlag = parseAgentFlag(args);
+  const taskId = args.find((a, i) => {
+    if (a.startsWith('-')) return false;
+    // Skip the value after --agent/-a
+    if (i > 0 && (args[i - 1] === '--agent' || args[i - 1] === '-a')) return false;
+    return true;
+  });
 
   if (isCoach) {
-    if (!coachOpts) {
+    const resolvedOpts = await resolveCoachingOptions(projectDir, agentFlag, coachOpts);
+    if (!resolvedOpts) {
       console.error(
         'Coaching requires an agent configuration. Pass --agent or configure in ralph.config.json.',
       );
@@ -366,7 +431,7 @@ export async function run(
         return;
       }
     }
-    const result = await runCoaching(taskId, projectDir, coachOpts);
+    const result = await runCoaching(taskId, projectDir, resolvedOpts);
     if (isJson) {
       console.log(formatCoachingJson(result));
     } else {

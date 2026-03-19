@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -353,6 +353,170 @@ describe('review command', () => {
         expect(json.taskId).toBe('T-042');
       } finally {
         console.log = origLog;
+      }
+    });
+
+    it('reads agent from ralph.config.json when --coach is used without coachOpts', async () => {
+      const { run } = await import('../commands/review.js');
+
+      // Write a ralph.config.json with agent configured
+      await writeFile(
+        join(tmpDir, 'ralph.config.json'),
+        JSON.stringify({
+          language: 'TypeScript',
+          packageManager: 'pnpm',
+          testingFramework: 'Vitest',
+          qualityCheck: 'pnpm check',
+          testCommand: 'pnpm test',
+          agent: 'claude',
+        }),
+      );
+
+      // Mock the coaching module to capture what was called
+      const coachModule = await import('../core/coach.js');
+      const runCoachingSpy = vi.spyOn(coachModule, 'runCoaching').mockResolvedValue({
+        mode: 'project',
+        analysis: 'Config-based coaching analysis.',
+        timestamp: new Date().toISOString(),
+      });
+
+      const logs: string[] = [];
+      const origLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+      try {
+        await run(['--coach'], tmpDir);
+        expect(runCoachingSpy).toHaveBeenCalledOnce();
+        const opts = runCoachingSpy.mock.calls[0][2];
+        expect(opts.agent).toBe('claude');
+        expect(typeof opts.spawnAgent).toBe('function');
+      } finally {
+        console.log = origLog;
+        runCoachingSpy.mockRestore();
+      }
+    });
+
+    it('uses --agent CLI flag as override over config', async () => {
+      const { run } = await import('../commands/review.js');
+
+      // Write a ralph.config.json with one agent
+      await writeFile(
+        join(tmpDir, 'ralph.config.json'),
+        JSON.stringify({
+          language: 'TypeScript',
+          packageManager: 'pnpm',
+          testingFramework: 'Vitest',
+          qualityCheck: 'pnpm check',
+          testCommand: 'pnpm test',
+          agent: 'gemini',
+        }),
+      );
+
+      const coachModule = await import('../core/coach.js');
+      const runCoachingSpy = vi.spyOn(coachModule, 'runCoaching').mockResolvedValue({
+        mode: 'project',
+        analysis: 'CLI override coaching.',
+        timestamp: new Date().toISOString(),
+      });
+
+      const logs: string[] = [];
+      const origLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+      try {
+        await run(['--coach', '--agent', 'claude'], tmpDir);
+        expect(runCoachingSpy).toHaveBeenCalledOnce();
+        const opts = runCoachingSpy.mock.calls[0][2];
+        expect(opts.agent).toBe('claude');
+      } finally {
+        console.log = origLog;
+        runCoachingSpy.mockRestore();
+      }
+    });
+
+    it('shows error when --coach used without config agent or --agent flag', async () => {
+      const { run } = await import('../commands/review.js');
+
+      // Write a ralph.config.json WITHOUT agent field
+      await writeFile(
+        join(tmpDir, 'ralph.config.json'),
+        JSON.stringify({
+          language: 'TypeScript',
+          packageManager: 'pnpm',
+          testingFramework: 'Vitest',
+          qualityCheck: 'pnpm check',
+          testCommand: 'pnpm test',
+        }),
+      );
+
+      const logs: string[] = [];
+      const origError = console.error;
+      console.error = (msg: string) => logs.push(msg);
+      try {
+        await run(['--coach'], tmpDir);
+        expect(logs.some((l) => l.includes('agent'))).toBe(true);
+      } finally {
+        console.error = origError;
+      }
+    });
+
+    it('uses -a as short flag for --agent', async () => {
+      const { run } = await import('../commands/review.js');
+
+      await writeFile(
+        join(tmpDir, 'ralph.config.json'),
+        JSON.stringify({
+          language: 'TypeScript',
+          packageManager: 'pnpm',
+          testingFramework: 'Vitest',
+          qualityCheck: 'pnpm check',
+          testCommand: 'pnpm test',
+        }),
+      );
+
+      const coachModule = await import('../core/coach.js');
+      const runCoachingSpy = vi.spyOn(coachModule, 'runCoaching').mockResolvedValue({
+        mode: 'project',
+        analysis: 'Short flag coaching.',
+        timestamp: new Date().toISOString(),
+      });
+
+      const logs: string[] = [];
+      const origLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+      try {
+        await run(['--coach', '-a', 'claude'], tmpDir);
+        expect(runCoachingSpy).toHaveBeenCalledOnce();
+        const opts = runCoachingSpy.mock.calls[0][2];
+        expect(opts.agent).toBe('claude');
+      } finally {
+        console.log = origLog;
+        runCoachingSpy.mockRestore();
+      }
+    });
+
+    it('still works when coachOpts are passed directly (existing behavior)', async () => {
+      const { run } = await import('../commands/review.js');
+
+      const coachModule = await import('../core/coach.js');
+      const runCoachingSpy = vi.spyOn(coachModule, 'runCoaching').mockResolvedValue({
+        mode: 'project',
+        analysis: 'Direct opts coaching.',
+        timestamp: new Date().toISOString(),
+      });
+
+      const logs: string[] = [];
+      const origLog = console.log;
+      console.log = (msg: string) => logs.push(msg);
+      try {
+        await run(['--coach'], tmpDir, {
+          agent: 'mock',
+          spawnAgent: async () => 'mock response',
+        });
+        expect(runCoachingSpy).toHaveBeenCalledOnce();
+        const opts = runCoachingSpy.mock.calls[0][2];
+        expect(opts.agent).toBe('mock');
+      } finally {
+        console.log = origLog;
+        runCoachingSpy.mockRestore();
       }
     });
   });
