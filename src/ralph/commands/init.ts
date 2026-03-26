@@ -36,6 +36,13 @@ export interface InitResult {
   overwritten: string[];
 }
 
+export function buildDefaultCommand(packageManager: string, script: string): string {
+  if (packageManager === 'npm') {
+    return `npm run ${script}`;
+  }
+  return `${packageManager} ${script}`;
+}
+
 function isNodeLanguage(language: string): boolean {
   const lower = language.toLowerCase();
   return lower.includes('typescript') || lower.includes('javascript');
@@ -267,12 +274,12 @@ async function promptForAnswers(defaults: Partial<InitAnswers>): Promise<InitAns
     const qualityCheck = await prompt(
       rl,
       'Check command',
-      defaults.qualityCheck ?? `${packageManager} check`,
+      defaults.qualityCheck ?? buildDefaultCommand(packageManager, 'check'),
     );
     const testCommand = await prompt(
       rl,
       'Test command',
-      defaults.testCommand ?? `${packageManager} test`,
+      defaults.testCommand ?? buildDefaultCommand(packageManager, 'test'),
     );
     const agent = await prompt(
       rl,

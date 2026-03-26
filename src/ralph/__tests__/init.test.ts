@@ -5,7 +5,13 @@ import * as os from 'node:os';
 import * as readline from 'node:readline';
 import { Readable, Writable } from 'node:stream';
 
-import { runInit, loadExistingDefaults, prompt, type InitAnswers } from '../commands/init.js';
+import {
+  runInit,
+  loadExistingDefaults,
+  prompt,
+  buildDefaultCommand,
+  type InitAnswers,
+} from '../commands/init.js';
 
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'ralph-init-'));
@@ -560,5 +566,26 @@ describe('prompt helper', () => {
     await prompt(rl, 'Project name');
     // Should just end with ": " — no parenthetical
     expect(questions[0]).toBe('Project name: ');
+  });
+});
+
+describe('buildDefaultCommand', () => {
+  it('returns pnpm <script> for pnpm', () => {
+    expect(buildDefaultCommand('pnpm', 'check')).toBe('pnpm check');
+    expect(buildDefaultCommand('pnpm', 'test')).toBe('pnpm test');
+  });
+
+  it('returns yarn <script> for yarn', () => {
+    expect(buildDefaultCommand('yarn', 'check')).toBe('yarn check');
+    expect(buildDefaultCommand('yarn', 'test')).toBe('yarn test');
+  });
+
+  it('returns npm run <script> for npm', () => {
+    expect(buildDefaultCommand('npm', 'check')).toBe('npm run check');
+    expect(buildDefaultCommand('npm', 'test')).toBe('npm run test');
+  });
+
+  it('returns <manager> <script> for unknown managers', () => {
+    expect(buildDefaultCommand('bun', 'check')).toBe('bun check');
   });
 });
